@@ -4,7 +4,7 @@ import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, TextInput } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
 
 export default function IncomingCallScreen() {
@@ -333,10 +333,15 @@ export default function IncomingCallScreen() {
       />
       
       <ThemedView style={styles.container}>
-        <ThemedView style={styles.content}>
-        <ThemedText style={styles.description}>
-          着信通話をシミュレートします
-        </ThemedText>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <ThemedView style={styles.content}>
+            <ThemedText style={styles.description}>
+              着信通話をシミュレートします
+            </ThemedText>
         
         <ThemedView style={styles.inputContainer}>
           <ThemedText style={styles.label}>電話番号</ThemedText>
@@ -431,7 +436,8 @@ export default function IncomingCallScreen() {
             ⚠️ 実際の着信ではありません。CallKitの動作確認用のシミュレート機能です。
           </ThemedText>
         </ThemedView>
-      </ThemedView>
+          </ThemedView>
+        </ScrollView>
       </ThemedView>
     </>
   );
@@ -441,8 +447,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  content: {
     padding: 20,
   },
   description: {
