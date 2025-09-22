@@ -3,6 +3,10 @@
 set -e
 
 echo "🚀 Starting Xcode Cloud post-clone script for CallKit App"
+echo "📍 Working directory: $(pwd)"
+
+# CI_PROJECT_FILE_PATHが/iosに設定されているため、iosディレクトリがワーキングディレクトリ
+# プロジェクトルートは一つ上のディレクトリ
 
 # Node.js setup
 echo "📦 Setting up Node.js environment"
@@ -15,8 +19,9 @@ echo "📦 Installing Node.js 18"
 nvm install 18
 nvm use 18
 
-# Install npm dependencies
-echo "📦 Installing npm dependencies"
+# プロジェクトルートに移動してnpm install実行
+echo "📦 Installing npm dependencies (in project root)"
+cd ..
 npm install
 
 # Install EAS CLI
@@ -27,10 +32,10 @@ npm install -g @expo/eas-cli
 echo "🏗️ Exporting iOS app with Expo"
 npx expo export --platform ios
 
-# Install CocoaPods dependencies
-echo "🍫 Installing CocoaPods dependencies"
+# iosディレクトリに戻ってCocoaPods実行
+echo "🍫 Installing CocoaPods dependencies (in ios directory)"
 cd ios
 pod install --repo-update
-cd ..
 
 echo "✅ Post-clone script completed successfully"
+echo "📍 Final working directory: $(pwd)"
