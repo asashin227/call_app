@@ -4,9 +4,8 @@ import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, TextInput } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const [description, setDescription] = useState('');
@@ -262,7 +261,7 @@ export default function HomeScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -278,27 +277,67 @@ export default function HomeScreen() {
         }}
       />
       
-          <ThemedView style={styles.content}>
-            <ThemedView style={styles.inputContainer}>
-              <ThemedText style={styles.label}>通話先</ThemedText>
-              <TextInput
-                style={styles.textInput}
-                placeholder="ユーザー名またはアカウント名"
-                placeholderTextColor="#999"
-                value={description}
-                onChangeText={setDescription}
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  // キーボードを閉じる
-                  if (textInputRef.current) {
-                    textInputRef.current.blur();
-                  }
-                }}
-                ref={textInputRef}
-              />
-            </ThemedView>
-          </ThemedView>
-    </SafeAreaView>
+      <ThemedView style={styles.container}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+        <ThemedView style={styles.content}>
+          <ThemedView style={styles.inputContainer}>
+          <ThemedText style={styles.label}>通話先</ThemedText>
+          <TextInput
+            style={styles.textInput}
+            placeholder="ユーザー名またはアカウント名"
+            placeholderTextColor="#999"
+            value={description}
+            onChangeText={setDescription}
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              // キーボードを閉じる
+              if (textInputRef.current) {
+                textInputRef.current.blur();
+              }
+            }}
+            ref={textInputRef}
+          />
+        </ThemedView>
+
+        <ThemedView style={styles.infoContainer}>
+          <ThemedText style={styles.infoTitle}>💡 使用方法</ThemedText>
+          <ThemedText style={styles.infoText}>
+            1. ユーザー名またはアカウント名を入力{'\n'}
+            2. 右上の「Call」ボタンを押す{'\n'}
+            3. マイク権限の許可（初回のみ）{'\n'}
+            4. CallKitの発信画面が表示される{'\n'}
+            5. 通話開始・終了・保留などが可能{'\n'}
+            {'\n'}
+            • 汎用タイプ（generic）での発信{'\n'}
+            • 日本語・英数字どちらでも対応{'\n'}
+            • 入力後は自動でクリア
+          </ThemedText>
+        </ThemedView>
+
+        <ThemedView style={styles.featuresContainer}>
+          <ThemedText style={styles.featuresTitle}>🚀 発信機能</ThemedText>
+          <ThemedText style={styles.featuresText}>
+            • **アカウント名発信**: 電話番号以外での通話{'\n'}
+            • **CallKit統合**: ネイティブ通話UI{'\n'}
+            • **権限管理**: 自動マイク権限要求{'\n'}
+            • **デバッグ情報**: 詳細ログ出力{'\n'}
+            • **環境対応**: シミュレーター・実機両対応
+          </ThemedText>
+        </ThemedView>
+
+        <ThemedView style={styles.warningContainer}>
+          <ThemedText style={styles.warningText}>
+            ⚠️ 実際の通話ではありません。CallKitの動作確認用のテスト機能です。
+          </ThemedText>
+        </ThemedView>
+        </ThemedView>
+      </ScrollView>
+      </ThemedView>
+    </>
   );
 }
 
@@ -306,8 +345,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  content: {
     padding: 20,
   },
   inputContainer: {
@@ -333,5 +377,54 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingHorizontal: 10,
     paddingVertical: 5,
+  },
+  infoContainer: {
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#0066cc',
+  },
+  infoText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333',
+  },
+  featuresContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  featuresTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#495057',
+  },
+  featuresText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#6c757d',
+  },
+  warningContainer: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#856404',
+    textAlign: 'center',
   },
 });
