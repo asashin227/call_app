@@ -216,8 +216,7 @@ export default function HomeScreen() {
         );
       }, 100);
       
-      // 入力欄をクリア
-      setDescription('');
+      // 入力欄はクリアしない（再利用のため保持）
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('💥 CallKit startCall error details:', {

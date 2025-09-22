@@ -168,9 +168,7 @@ export default function IncomingCallScreen() {
         ]
       );
 
-      // 入力欄をクリア
-      setPhoneNumber('');
-      setDisplayName('');
+      // 入力欄はクリアしない（再利用のため保持）
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
