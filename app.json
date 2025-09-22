@@ -11,7 +11,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dev.asashin227.call-app",
-      "appleTeamId": "RJ5X8394TP"
+      "appleTeamId": "RJ5X8394TP",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "このアプリは通話機能にマイクを使用します。CallKitによる通話にはマイクのアクセス権が必要です。",
+        "UIBackgroundModes": ["voip"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,6 +34,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-av",
       [
         "expo-splash-screen",
         {
