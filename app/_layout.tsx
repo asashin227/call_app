@@ -84,7 +84,42 @@ export default function RootLayout() {
 
         RNCallKeep.addEventListener('didDisplayIncomingCall', (data) => {
           console.log('📱 CallKit: Incoming call displayed -', data);
-          // 着信表示完了の処理
+          console.log('- CallUUID:', data.callUUID);
+          console.log('- Handle:', data.handle);
+          console.log('- LocalizedCallerName:', data.localizedCallerName);
+          console.log('- HasVideo:', data.hasVideo);
+          // 着信表示完了の処理 - 実際のアプリでは着信音再生等
+        });
+
+        // 着信通話拒否処理
+        RNCallKeep.addEventListener('didRejectIncomingCall', (data) => {
+          console.log('❌ CallKit: Incoming call rejected -', data);
+          if (data.callUUID) {
+            console.log('- Rejected call UUID:', data.callUUID);
+            // 実際のアプリでは通話拒否の処理を実装
+          }
+        });
+
+        // 通話保留・保留解除処理
+        RNCallKeep.addEventListener('didToggleHoldCallAction', (data) => {
+          console.log('⏸️ CallKit: Hold call toggled -', data);
+          if (data.callUUID) {
+            const isOnHold = data.hold;
+            console.log(`- Call ${data.callUUID} ${isOnHold ? 'put on hold' : 'taken off hold'}`);
+            // 実際のアプリでは保留状態の管理を実装
+          }
+        });
+
+        // 通話失敗処理
+        RNCallKeep.addEventListener('didReportConnectedOutgoingCallWithUUID', (data) => {
+          console.log('✅ CallKit: Outgoing call connected -', data);
+        });
+
+        // 通話失敗通知
+        RNCallKeep.addEventListener('didReportFailedOutgoingCallWithUUID', (data) => {
+          console.log('❌ CallKit: Outgoing call failed -', data);
+          console.log('- Failed call UUID:', data.callUUID);
+          console.log('- Error:', data.error);
         });
 
         RNCallKeep.addEventListener('didChangeAudioRoute', (data) => {
@@ -143,6 +178,10 @@ export default function RootLayout() {
       RNCallKeep.removeEventListener('answerCall');
       RNCallKeep.removeEventListener('endCall');
       RNCallKeep.removeEventListener('didDisplayIncomingCall');
+      RNCallKeep.removeEventListener('didRejectIncomingCall');
+      RNCallKeep.removeEventListener('didToggleHoldCallAction');
+      RNCallKeep.removeEventListener('didReportConnectedOutgoingCallWithUUID');
+      RNCallKeep.removeEventListener('didReportFailedOutgoingCallWithUUID');
       RNCallKeep.removeEventListener('didChangeAudioRoute');
       RNCallKeep.removeEventListener('didReceiveStartCallAction');
       RNCallKeep.removeEventListener('didPerformDTMFAction');
