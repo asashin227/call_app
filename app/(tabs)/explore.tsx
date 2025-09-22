@@ -317,7 +317,7 @@ export default function IncomingCallScreen() {
           headerShown: true,
           title: '受信',
           headerRight: () => (
-            <ThemedText
+        <ThemedText
               style={[
                 styles.simulateButton, 
                 isWaiting && styles.cancelButton
@@ -398,20 +398,26 @@ export default function IncomingCallScreen() {
         </ThemedView>
 
         {/* カウントダウン表示 */}
-        {isWaiting && (
+        {isWaiting && countdown > 0 && (
           <ThemedView style={styles.countdownContainer}>
-            <ThemedText style={styles.countdownTitle}>
-              📞 着信まで
-            </ThemedText>
-            <ThemedText style={styles.countdownNumber}>
-              {countdown}
-            </ThemedText>
-            <ThemedText style={styles.countdownUnit}>
-              秒
-            </ThemedText>
-            <ThemedText style={styles.countdownMessage}>
-              {displayName} からの着信を準備中...
-            </ThemedText>
+            <ThemedView style={styles.countdownHeader}>
+              <ThemedText style={styles.countdownTitle}>
+                📞 着信まで
+              </ThemedText>
+            </ThemedView>
+            <ThemedView style={styles.countdownBody}>
+              <ThemedText style={styles.countdownNumber}>
+                {countdown}
+              </ThemedText>
+              <ThemedText style={styles.countdownUnit}>
+                秒
+              </ThemedText>
+            </ThemedView>
+            <ThemedView style={styles.countdownFooter}>
+              <ThemedText style={styles.countdownMessage}>
+                {displayName} からの着信を準備中...
+              </ThemedText>
+            </ThemedView>
           </ThemedView>
         )}
 
@@ -495,29 +501,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#4CAF50',
+    minHeight: 200, // 最小高さを確保
+    justifyContent: 'space-between',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  countdownHeader: {
+    alignItems: 'center',
+    marginBottom: 5,
+    backgroundColor: 'transparent',
+  },
+  countdownBody: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginVertical: 10,
+    backgroundColor: 'transparent',
+  },
+  countdownFooter: {
+    alignItems: 'center',
+    marginTop: 5,
+    backgroundColor: 'transparent',
   },
   countdownTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#2E7D32',
-    marginBottom: 8,
+    marginBottom: 10,
+    textAlign: 'center',
+    lineHeight: 24,
+    backgroundColor: 'transparent',
   },
   countdownNumber: {
-    fontSize: 48,
+    fontSize: 64, // より大きく、見やすく
     fontWeight: 'bold',
     color: '#4CAF50',
-    marginVertical: 8,
+    marginVertical: 12,
+    lineHeight: 72, // フォントサイズに適した行高
+    textAlign: 'center',
+    minHeight: 72, // 数字表示領域の最小高さを確保
+    backgroundColor: 'transparent',
   },
   countdownUnit: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#2E7D32',
-    marginBottom: 12,
+    marginBottom: 15,
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 22,
+    backgroundColor: 'transparent',
   },
   countdownMessage: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#555',
     textAlign: 'center',
     fontStyle: 'italic',
+    lineHeight: 22,
+    marginTop: 5,
+    paddingHorizontal: 10,
+    backgroundColor: 'transparent',
   },
   infoContainer: {
     backgroundColor: '#f0f8ff',
