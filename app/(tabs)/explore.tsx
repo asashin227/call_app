@@ -6,7 +6,6 @@ import { Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, TextInput } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function IncomingCallScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -314,13 +313,13 @@ export default function IncomingCallScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <>
       <Stack.Screen
         options={{
           headerShown: true,
           title: '受信',
           headerRight: () => (
-        <ThemedText
+            <ThemedText
               style={[
                 styles.simulateButton, 
                 isWaiting && styles.cancelButton
@@ -333,7 +332,8 @@ export default function IncomingCallScreen() {
         }}
       />
       
-      <ThemedView style={styles.content}>
+      <ThemedView style={styles.container}>
+        <ThemedView style={styles.content}>
         <ThemedText style={styles.description}>
           着信通話をシミュレートします
         </ThemedText>
@@ -432,7 +432,8 @@ export default function IncomingCallScreen() {
           </ThemedText>
         </ThemedView>
       </ThemedView>
-    </SafeAreaView>
+      </ThemedView>
+    </>
   );
 }
 
