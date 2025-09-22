@@ -6,6 +6,7 @@ import RNCallKeep from 'react-native-callkeep';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { audioService } from '@/services/AudioService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -54,8 +55,17 @@ export default function RootLayout() {
           // オーディオセッションがアクティブになったことを処理
         });
 
-        RNCallKeep.addEventListener('answerCall', (data) => {
+        RNCallKeep.addEventListener('answerCall', async (data) => {
           console.log('📞 CallKit: Answer call -', data);
+          
+          // 通話接続音を再生
+          try {
+            console.log('🎵 CallKit: Playing connected audio');
+            await audioService.handleCallStateChange('connected');
+          } catch (audioError) {
+            console.error('❌ CallKit: Failed to play connected audio:', audioError);
+          }
+          
           // 通話応答処理 - 実際のアプリでは通話開始処理を実装
           try {
             if (data.callUUID) {
@@ -68,8 +78,17 @@ export default function RootLayout() {
           }
         });
 
-        RNCallKeep.addEventListener('endCall', (data) => {
+        RNCallKeep.addEventListener('endCall', async (data) => {
           console.log('📞 CallKit: End call -', data);
+          
+          // 通話終了音を再生
+          try {
+            console.log('🎵 CallKit: Playing disconnect audio');
+            await audioService.handleCallStateChange('ended');
+          } catch (audioError) {
+            console.error('❌ CallKit: Failed to play disconnect audio:', audioError);
+          }
+          
           // 通話終了処理
           try {
             if (data.callUUID) {
@@ -91,14 +110,8 @@ export default function RootLayout() {
           // 着信表示完了の処理 - 実際のアプリでは着信音再生等
         });
 
-        // 着信通話拒否処理
-        RNCallKeep.addEventListener('didRejectIncomingCall', (data) => {
-          console.log('❌ CallKit: Incoming call rejected -', data);
-          if (data.callUUID) {
-            console.log('- Rejected call UUID:', data.callUUID);
-            // 実際のアプリでは通話拒否の処理を実装
-          }
-        });
+        // 着信通話拒否処理（コメントのみ保持、実際の処理は上記のendCallで統合）
+        // RNCallKeep.addEventListener('didRejectIncomingCall', ...) は型定義に含まれていないため削除
 
         // 通話保留・保留解除処理
         RNCallKeep.addEventListener('didToggleHoldCallAction', (data) => {
@@ -110,17 +123,9 @@ export default function RootLayout() {
           }
         });
 
-        // 通話失敗処理
-        RNCallKeep.addEventListener('didReportConnectedOutgoingCallWithUUID', (data) => {
-          console.log('✅ CallKit: Outgoing call connected -', data);
-        });
-
-        // 通話失敗通知
-        RNCallKeep.addEventListener('didReportFailedOutgoingCallWithUUID', (data) => {
-          console.log('❌ CallKit: Outgoing call failed -', data);
-          console.log('- Failed call UUID:', data.callUUID);
-          console.log('- Error:', data.error);
-        });
+        // 通話接続・失敗処理（コメントのみ保持、型定義にないため削除）
+        // RNCallKeep.addEventListener('didReportConnectedOutgoingCallWithUUID', ...) は型定義に含まれていないため削除
+        // RNCallKeep.addEventListener('didReportFailedOutgoingCallWithUUID', ...) は型定義に含まれていないため削除
 
         RNCallKeep.addEventListener('didChangeAudioRoute', (data) => {
           console.log('🎧 CallKit: Audio route changed -', data);
@@ -174,18 +179,21 @@ export default function RootLayout() {
     
     // クリーンアップ
     return () => {
+      // CallKitイベントリスナーをクリーンアップ
       RNCallKeep.removeEventListener('didActivateAudioSession');
       RNCallKeep.removeEventListener('answerCall');
       RNCallKeep.removeEventListener('endCall');
       RNCallKeep.removeEventListener('didDisplayIncomingCall');
-      RNCallKeep.removeEventListener('didRejectIncomingCall');
       RNCallKeep.removeEventListener('didToggleHoldCallAction');
-      RNCallKeep.removeEventListener('didReportConnectedOutgoingCallWithUUID');
-      RNCallKeep.removeEventListener('didReportFailedOutgoingCallWithUUID');
       RNCallKeep.removeEventListener('didChangeAudioRoute');
       RNCallKeep.removeEventListener('didReceiveStartCallAction');
       RNCallKeep.removeEventListener('didPerformDTMFAction');
       RNCallKeep.removeEventListener('didPerformSetMutedCallAction');
+      
+      // AudioServiceをクリーンアップ
+      audioService.cleanup().catch((error) => {
+        console.error('❌ Failed to cleanup audio service:', error);
+      });
     };
   }, []);
 

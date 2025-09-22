@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { audioService } from '@/services/AudioService';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
@@ -167,6 +168,10 @@ export default function HomeScreen() {
           console.warn('⚠️ CallKit: Permission check failed -', permissionError);
         }
       }
+      
+      // 発信音を開始
+      console.log('🎵 CallKit: Starting outgoing call audio');
+      await audioService.handleCallStateChange('outgoing');
       
       // CallKitで通話を開始（汎用タイプを使用）
       console.log('🚀 CallKit: Calling RNCallKeep.startCall...');

@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { audioService } from '@/services/AudioService';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
@@ -126,6 +127,10 @@ export default function IncomingCallScreen() {
       console.log('- UUID:', uuid);
       console.log('- Phone Number:', callerPhoneNumber);
       console.log('- Display Name:', callerDisplayName);
+
+      // 着信音を開始
+      console.log('🎵 CallKit: Starting incoming call audio');
+      await audioService.handleCallStateChange('ringing');
 
       // CallKitで着信通話を表示
       RNCallKeep.displayIncomingCall(
