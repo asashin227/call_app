@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "call_app",
+    "name": "Call App",
     "slug": "call_app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,9 +12,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "dev.asashin227.call-app",
       "appleTeamId": "RJ5X8394TP",
+      "buildNumber": "1",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "このアプリは通話機能にマイクを使用します。CallKitによる通話にはマイクのアクセス権が必要です。",
-        "UIBackgroundModes": ["voip"]
+        "UIBackgroundModes": ["voip"],
+        "CFBundleDisplayName": "Call App",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
