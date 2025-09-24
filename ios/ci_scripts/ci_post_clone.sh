@@ -142,9 +142,37 @@ cd "$PROJECT_ROOT"
 echo "📂 Project root directory contents:"
 ls -la
 
-# Verify package.json exists in project root
+# Check if @react-native-community/cli is in package.json and add if missing
+echo "🔍 Checking for required React Native CLI dependency"
 if [ -f "package.json" ]; then
-    echo "✅ Confirmed package.json exists in: $(pwd)"
+    if ! grep -q "@react-native-community/cli" package.json; then
+        echo "📦 Adding @react-native-community/cli to devDependencies"
+        
+        # Create a temporary Node script to add the dependency
+        cat > add_dependency.js << 'EOF'
+const fs = require('fs');
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+if (!packageJson.devDependencies) {
+    packageJson.devDependencies = {};
+}
+
+// Add missing React Native dependencies
+packageJson.devDependencies['@react-native-community/cli'] = '^12.0.0';
+packageJson.devDependencies['@react-native-community/cli-platform-ios'] = '^12.0.0';
+
+fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
+console.log('✅ Added React Native CLI dependencies to package.json');
+EOF
+        
+        node add_dependency.js
+        rm add_dependency.js
+        
+        echo "📄 Updated package.json devDependencies:"
+        grep -A 5 -B 1 "@react-native-community/cli" package.json || echo "Dependency check failed"
+    else
+        echo "✅ @react-native-community/cli already present in package.json"
+    fi
     
     # Clear npm cache to avoid issues
     npm cache clean --force
@@ -209,6 +237,14 @@ if npx --version &> /dev/null; then
     fi
 else
     echo "❌ npx not available"
+fi
+
+# Verify React Native CLI is available
+echo "🔍 Verifying React Native CLI availability:"
+if [ -f "node_modules/@react-native-community/cli/build/bin.js" ]; then
+    echo "✅ React Native CLI found in node_modules"
+else
+    echo "❌ React Native CLI not found in node_modules"
 fi
 
 # Check app.json/app.config.js for Expo configuration
@@ -280,9 +316,9 @@ else
     echo "❌ Global expo not available for Method 3"
 fi
 
-# Method 4: Alternative approach - create iOS project manually using existing tools
+# Method 4: Enhanced manual iOS project creation
 if [ "$EXPO_SUCCESS" = false ]; then
-    echo "🔄 Method 4: Alternative manual iOS project creation"
+    echo "🔄 Method 4: Enhanced manual iOS project creation"
     
     # Check if we can skip prebuild by using existing iOS directory
     if [ -d "/Volumes/workspace/repository/ios" ] && [ -f "/Volumes/workspace/repository/ios/Podfile" ]; then
@@ -291,40 +327,166 @@ if [ "$EXPO_SUCCESS" = false ]; then
     else
         echo "❌ No existing iOS directory found"
         
-        # Try to create basic iOS structure manually
-        echo "🔧 Attempting to create basic iOS structure"
+        # Create enhanced iOS structure manually
+        echo "🔧 Creating enhanced iOS structure with proper React Native integration"
         mkdir -p ios
         cd ios
         
-        # Create a basic Podfile
+        # Get app name from package.json
+        APP_NAME="callapp"
+        if [ -f "$PROJECT_ROOT/package.json" ]; then
+            APP_NAME=$(node -p "require('$PROJECT_ROOT/package.json').name.replace(/[^a-zA-Z0-9]/g, '')" 2>/dev/null || echo "callapp")
+        fi
+        echo "📱 Using app name: $APP_NAME"
+        
+        # Create an improved Podfile with proper React Native CLI integration
         cat > Podfile << EOF
-require File.join(File.dirname(\`node --print "require.resolve('expo/package.json')"\`), "scripts/autolinking")
-require File.join(File.dirname(\`node --print "require.resolve('react-native/package.json')"\`), "scripts/react_native_pods")
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
 
 platform :ios, '13.0'
 install! 'cocoapods', :deterministic_uuids => false
 
-target 'callapp' do
-  use_expo_modules!
+# Force bundler to use system gem
+if respond_to?(:install!) && defined?(Bundler)
+  install! 'cocoapods', :deterministic_uuids => false
+end
+
+target '$APP_NAME' do
   config = use_native_modules!
 
   use_react_native!(
     :path => config[:reactNativePath],
-    :hermes_enabled => true,
-    :fabric_enabled => false,
+    # Enables Flipper.
+    #
+    # Note that if you have use_frameworks! enabled, Flipper will not work and
+    # you should disable the next line.
+    :flipper_configuration => false,
+    # An absolute path to your application root.
+    :app_path => "$PROJECT_ROOT"
   )
 
   post_install do |installer|
-    react_native_post_install(installer)
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false
+    )
   end
 end
 EOF
+
+        # Create basic iOS app structure
+        mkdir -p "$APP_NAME"
+        
+        # Create Info.plist
+        cat > "$APP_NAME/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>Call App</string>
+  <key>CFBundleExecutable</key>
+  <string>$APP_NAME</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.asashin227.call-app</string>
+  <key>CFBundleName</key>
+  <string>$APP_NAME</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSRequiresIPhoneOS</key>
+  <true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>このアプリは通話機能にマイクを使用します。CallKitによる通話にはマイクのアクセス権が必要です。</string>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>voip</string>
+  </array>
+  <key>UILaunchStoryboardName</key>
+  <string>LaunchScreen</string>
+  <key>UIRequiredDeviceCapabilities</key>
+  <array>
+    <string>armv7</string>
+  </array>
+  <key>UIStatusBarStyle</key>
+  <string>UIStatusBarStyleDefault</string>
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>UIViewControllerBasedStatusBarAppearance</key>
+  <false/>
+</dict>
+</plist>
+EOF
+        
+        # Create basic AppDelegate.swift
+        cat > "$APP_NAME/AppDelegate.swift" << EOF
+import UIKit
+import React
+
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
+
+  var window: UIWindow?
+
+  func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    let bridge = RCTBridge(delegate: self, launchOptions: launchOptions)!
+    let rootView = RCTRootView(bridge: bridge, moduleName: "$APP_NAME", initialProperties: nil)
+
+    if #available(iOS 13.0, *) {
+        rootView.backgroundColor = UIColor.systemBackground
+    } else {
+        rootView.backgroundColor = UIColor.white
+    }
+
+    self.window = UIWindow(frame: UIScreen.main.bounds)
+    let rootViewController = UIViewController()
+    rootViewController.view = rootView
+    self.window?.rootViewController = rootViewController
+    self.window?.makeKeyAndVisible()
+
+    return true
+  }
+}
+
+extension AppDelegate: RCTBridgeDelegate {
+  func sourceURL(for bridge: RCTBridge!) -> URL! {
+#if DEBUG
+    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+#else
+    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+#endif
+  }
+}
+EOF
         
         if [ -f "Podfile" ]; then
-            echo "✅ Basic Podfile created manually"
+            echo "✅ Enhanced Podfile created with proper React Native CLI integration"
+            echo "📄 Podfile preview:"
+            head -n 20 Podfile
             EXPO_SUCCESS=true
         else
-            echo "❌ Failed to create basic Podfile"
+            echo "❌ Failed to create enhanced Podfile"
         fi
         
         cd "$PROJECT_ROOT"
@@ -340,6 +502,7 @@ if [ "$EXPO_SUCCESS" = false ]; then
     echo "  - Global expo: $(command -v expo &> /dev/null && echo 'Yes' || echo 'No')"
     echo "  - app.json: $([ -f 'app.json' ] && echo 'Yes' || echo 'No')"
     echo "  - node_modules: $([ -d 'node_modules' ] && echo 'Yes' || echo 'No')"
+    echo "  - React Native CLI: $([ -f 'node_modules/@react-native-community/cli/build/bin.js' ] && echo 'Yes' || echo 'No')"
     
     # Try one more time with maximum verbosity and error capture
     echo "🔄 Final attempt with maximum debugging:"
@@ -397,11 +560,39 @@ if [ -f "Podfile" ]; then
     echo "🧹 Cleaning previous CocoaPods installations"
     rm -rf Pods/ Podfile.lock 2>/dev/null || true
     
+    # Set Node path for CocoaPods
+    echo "🔧 Configuring Node path for CocoaPods"
+    export NODE_BINARY=$(which node)
+    echo "📍 NODE_BINARY set to: $NODE_BINARY"
+    
     # Install pods with verbose output
     echo "📦 Running pod install with verbose output"
-    pod install --repo-update --verbose
-    
-    echo "✅ CocoaPods installation completed"
+    if pod install --repo-update --verbose; then
+        echo "✅ CocoaPods installation completed successfully"
+    else
+        echo "⚠️ Initial pod install failed, trying with additional fixes"
+        
+        # Try to fix common issues
+        echo "🔧 Applying pod install fixes"
+        
+        # Clear CocoaPods cache
+        pod cache clean --all 2>/dev/null || true
+        
+        # Update pod repo
+        pod repo update 2>/dev/null || true
+        
+        # Try again with more aggressive options
+        if pod install --repo-update --verbose --deployment; then
+            echo "✅ CocoaPods installation completed with fixes"
+        else
+            echo "❌ CocoaPods installation failed even with fixes"
+            echo "📜 Podfile content for debugging:"
+            cat Podfile
+            echo "📦 Available node_modules packages:"
+            ls -la "$PROJECT_ROOT/node_modules" | grep react | head -n 10
+            exit 1
+        fi
+    fi
     
     # Verify Pods directory was created
     if [ -d "Pods" ]; then
@@ -431,6 +622,7 @@ echo "  - Podfile exists: $([ -f "$IOS_DIR/Podfile" ] && echo '✅ Yes' || echo 
 echo "  - Pods directory exists: $([ -d "$IOS_DIR/Pods" ] && echo '✅ Yes' || echo '❌ No')"
 echo "  - Xcode project exists: $(find "$IOS_DIR" -name "*.xcodeproj" -type d | head -n 1 | xargs test -d && echo '✅ Yes' || echo '❌ No')"
 echo "  - Xcode workspace exists: $(find "$IOS_DIR" -name "*.xcworkspace" -type d | head -n 1 | xargs test -d && echo '✅ Yes' || echo '❌ No')"
+echo "  - React Native CLI available: $([ -f "$PROJECT_ROOT/node_modules/@react-native-community/cli/build/bin.js" ] && echo '✅ Yes' || echo '❌ No')"
 
 echo "🎉 Post-clone script completed successfully"
 echo "📍 Final working directory: $(pwd)"
@@ -442,4 +634,5 @@ echo "  - Expo CLI: $(npx expo --version 2>/dev/null || echo 'Not available')"
 echo "  - CocoaPods: $(pod --version 2>/dev/null || echo 'Not available')"
 echo "  - Project Root: $PROJECT_ROOT"
 echo "  - iOS Directory: $IOS_DIR"
+echo "  - NODE_BINARY: $NODE_BINARY"
 echo "  - PATH (first 200 chars): ${PATH:0:200}..."
