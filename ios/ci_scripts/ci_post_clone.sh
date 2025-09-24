@@ -158,25 +158,76 @@ else
     exit 1
 fi
 
-# Install EAS CLI
-echo "📦 Installing EAS CLI"
-npm install -g @expo/eas-cli --no-audit --no-fund
-
-# Verify EAS CLI installation
-if command -v eas &> /dev/null; then
-    echo "✅ EAS CLI installed: $(eas --version)"
+# Install Expo CLI globally (more reliable than EAS CLI for export)
+echo "📦 Installing Expo CLI"
+if npm install -g @expo/cli --no-audit --no-fund; then
+    echo "✅ Expo CLI installed successfully"
+    if command -v expo &> /dev/null; then
+        echo "✅ Expo CLI available: $(expo --version)"
+    fi
 else
-    echo "⚠️ EAS CLI not in PATH, trying npx..."
+    echo "⚠️ Expo CLI installation failed, will use npx fallback"
 fi
 
-# Export iOS app
-echo "🏗️ Exporting iOS app with Expo"
-if command -v npx &> /dev/null; then
-    npx expo export --platform ios
-    echo "✅ Expo export completed"
+# Try to install EAS CLI (optional, for future use)
+echo "📦 Attempting to install EAS CLI (optional)"
+if npm install -g eas-cli --no-audit --no-fund 2>/dev/null; then
+    echo "✅ EAS CLI installed successfully"
+    if command -v eas &> /dev/null; then
+        echo "✅ EAS CLI available: $(eas --version)"
+    fi
 else
-    echo "❌ npx not available"
+    echo "⚠️ EAS CLI installation failed (this is optional and won't affect the build)"
+fi
+
+# Export iOS app using Expo
+echo "🏗️ Exporting iOS app with Expo"
+
+# Try multiple methods to run expo export
+EXPO_EXPORT_SUCCESS=false
+
+# Method 1: Try expo CLI directly
+if command -v expo &> /dev/null; then
+    echo "🔄 Trying expo export with global Expo CLI"
+    if expo export --platform ios; then
+        echo "✅ Expo export completed successfully with global CLI"
+        EXPO_EXPORT_SUCCESS=true
+    else
+        echo "⚠️ Expo export failed with global CLI, trying npx"
+    fi
+fi
+
+# Method 2: Try npx expo (most reliable)
+if [ "$EXPO_EXPORT_SUCCESS" = false ] && command -v npx &> /dev/null; then
+    echo "🔄 Trying expo export with npx"
+    if npx expo export --platform ios; then
+        echo "✅ Expo export completed successfully with npx"
+        EXPO_EXPORT_SUCCESS=true
+    else
+        echo "⚠️ Expo export failed with npx"
+    fi
+fi
+
+# Method 3: Try local node_modules
+if [ "$EXPO_EXPORT_SUCCESS" = false ] && [ -f "node_modules/.bin/expo" ]; then
+    echo "🔄 Trying expo export with local node_modules"
+    if ./node_modules/.bin/expo export --platform ios; then
+        echo "✅ Expo export completed successfully with local CLI"
+        EXPO_EXPORT_SUCCESS=true
+    else
+        echo "⚠️ Expo export failed with local CLI"
+    fi
+fi
+
+# Check if expo export was successful
+if [ "$EXPO_EXPORT_SUCCESS" = false ]; then
+    echo "❌ All expo export methods failed"
+    echo "📂 Available expo executables:"
+    which expo 2>/dev/null || echo "expo not in PATH"
+    ls -la node_modules/.bin/expo 2>/dev/null || echo "expo not in local node_modules"
     exit 1
+else
+    echo "✅ Expo export process completed successfully"
 fi
 
 # Navigate back to ios directory for CocoaPods
@@ -227,6 +278,8 @@ echo "📊 Environment summary:"
 echo "  - System: $(uname -a)"
 echo "  - Node.js: $(node --version)"
 echo "  - npm: $(npm --version)"
+echo "  - Expo CLI: $(expo --version 2>/dev/null || echo 'Not available in PATH')"
+echo "  - EAS CLI: $(eas --version 2>/dev/null || echo 'Not available')"
 echo "  - CocoaPods: $(pod --version 2>/dev/null || echo 'Not available')"
 echo "  - Project Root: $PROJECT_ROOT"
 echo "  - iOS Directory: $IOS_DIR"
