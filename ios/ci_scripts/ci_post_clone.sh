@@ -158,7 +158,7 @@ else
     exit 1
 fi
 
-# Install Expo CLI globally (more reliable than EAS CLI for export)
+# Install Expo CLI globally (required for prebuild)
 echo "📦 Installing Expo CLI"
 if npm install -g @expo/cli --no-audit --no-fund; then
     echo "✅ Expo CLI installed successfully"
@@ -166,89 +166,86 @@ if npm install -g @expo/cli --no-audit --no-fund; then
         echo "✅ Expo CLI available: $(expo --version)"
     fi
 else
-    echo "⚠️ Expo CLI installation failed, will use npx fallback"
+    echo "❌ Expo CLI installation failed"
+    exit 1
 fi
 
-# Try to install EAS CLI (optional, for future use)
-echo "📦 Attempting to install EAS CLI (optional)"
-if npm install -g eas-cli --no-audit --no-fund 2>/dev/null; then
-    echo "✅ EAS CLI installed successfully"
-    if command -v eas &> /dev/null; then
-        echo "✅ EAS CLI available: $(eas --version)"
-    fi
-else
-    echo "⚠️ EAS CLI installation failed (this is optional and won't affect the build)"
-fi
+# Generate iOS native project using expo prebuild
+echo "🏗️ Generating iOS native project with expo prebuild"
 
-# Export iOS app using Expo
-echo "🏗️ Exporting iOS app with Expo"
-
-# Try multiple methods to run expo export
-EXPO_EXPORT_SUCCESS=false
+# Try multiple methods to run expo prebuild
+EXPO_PREBUILD_SUCCESS=false
 
 # Method 1: Try expo CLI directly
 if command -v expo &> /dev/null; then
-    echo "🔄 Trying expo export with global Expo CLI"
-    if expo export --platform ios; then
-        echo "✅ Expo export completed successfully with global CLI"
-        EXPO_EXPORT_SUCCESS=true
+    echo "🔄 Trying expo prebuild with global Expo CLI"
+    if expo prebuild --platform ios --clear --non-interactive; then
+        echo "✅ expo prebuild completed successfully with global CLI"
+        EXPO_PREBUILD_SUCCESS=true
     else
-        echo "⚠️ Expo export failed with global CLI, trying npx"
+        echo "⚠️ expo prebuild failed with global CLI, trying npx"
     fi
 fi
 
 # Method 2: Try npx expo (most reliable)
-if [ "$EXPO_EXPORT_SUCCESS" = false ] && command -v npx &> /dev/null; then
-    echo "🔄 Trying expo export with npx"
-    if npx expo export --platform ios; then
-        echo "✅ Expo export completed successfully with npx"
-        EXPO_EXPORT_SUCCESS=true
+if [ "$EXPO_PREBUILD_SUCCESS" = false ] && command -v npx &> /dev/null; then
+    echo "🔄 Trying expo prebuild with npx"
+    if npx expo prebuild --platform ios --clear --non-interactive; then
+        echo "✅ expo prebuild completed successfully with npx"
+        EXPO_PREBUILD_SUCCESS=true
     else
-        echo "⚠️ Expo export failed with npx"
+        echo "⚠️ expo prebuild failed with npx"
     fi
 fi
 
 # Method 3: Try local node_modules
-if [ "$EXPO_EXPORT_SUCCESS" = false ] && [ -f "node_modules/.bin/expo" ]; then
-    echo "🔄 Trying expo export with local node_modules"
-    if ./node_modules/.bin/expo export --platform ios; then
-        echo "✅ Expo export completed successfully with local CLI"
-        EXPO_EXPORT_SUCCESS=true
+if [ "$EXPO_PREBUILD_SUCCESS" = false ] && [ -f "node_modules/.bin/expo" ]; then
+    echo "🔄 Trying expo prebuild with local node_modules"
+    if ./node_modules/.bin/expo prebuild --platform ios --clear --non-interactive; then
+        echo "✅ expo prebuild completed successfully with local CLI"
+        EXPO_PREBUILD_SUCCESS=true
     else
-        echo "⚠️ Expo export failed with local CLI"
+        echo "⚠️ expo prebuild failed with local CLI"
     fi
 fi
 
-# Check if expo export was successful
-if [ "$EXPO_EXPORT_SUCCESS" = false ]; then
-    echo "❌ All expo export methods failed"
+# Check if expo prebuild was successful
+if [ "$EXPO_PREBUILD_SUCCESS" = false ]; then
+    echo "❌ All expo prebuild methods failed"
     echo "📂 Available expo executables:"
     which expo 2>/dev/null || echo "expo not in PATH"
     ls -la node_modules/.bin/expo 2>/dev/null || echo "expo not in local node_modules"
     exit 1
 else
-    echo "✅ Expo export process completed successfully"
+    echo "✅ expo prebuild process completed successfully"
 fi
 
-# Navigate back to ios directory for CocoaPods
-echo "🍫 Installing CocoaPods dependencies"
+# Verify iOS directory and Podfile were created
+echo "🔍 Verifying iOS project generation"
 
-# Find ios directory relative to project root
 if [ -d "$PROJECT_ROOT/ios" ]; then
-    IOS_DIR="$PROJECT_ROOT/ios"
-elif [ -d "$CURRENT_DIR" ]; then
-    IOS_DIR="$CURRENT_DIR"
+    echo "✅ iOS directory successfully created at: $PROJECT_ROOT/ios"
+    echo "📂 Contents of generated iOS directory:"
+    ls -la "$PROJECT_ROOT/ios"
 else
-    echo "❌ iOS directory not found"
+    echo "❌ iOS directory not found after prebuild"
+    echo "📂 Contents of project root after prebuild:"
+    ls -la "$PROJECT_ROOT"
     exit 1
 fi
 
+# Navigate to ios directory for CocoaPods
+echo "🍫 Installing CocoaPods dependencies"
+
+IOS_DIR="$PROJECT_ROOT/ios"
 echo "🎯 Using iOS directory: $IOS_DIR"
 cd "$IOS_DIR"
 
 # Verify we're in the ios directory and Podfile exists
 if [ -f "Podfile" ]; then
     echo "✅ Found Podfile in: $(pwd)"
+    echo "📄 Podfile preview (first 10 lines):"
+    head -n 10 Podfile
     
     # Verify CocoaPods is available
     if command -v pod &> /dev/null; then
@@ -259,18 +256,43 @@ if [ -f "Podfile" ]; then
     fi
     
     # Clean previous installations
+    echo "🧹 Cleaning previous CocoaPods installations"
     rm -rf Pods/ Podfile.lock 2>/dev/null || true
     
     # Install pods with verbose output
+    echo "📦 Running pod install with verbose output"
     pod install --repo-update --verbose
     
     echo "✅ CocoaPods installation completed"
+    
+    # Verify Pods directory was created
+    if [ -d "Pods" ]; then
+        echo "✅ Pods directory successfully created"
+        echo "📊 Pods installation summary:"
+        ls -la Pods/ | head -n 10
+    else
+        echo "❌ Pods directory not found after pod install"
+        exit 1
+    fi
+    
 else
     echo "❌ Podfile not found in $(pwd)"
     echo "📂 Contents of iOS directory:"
     ls -la
+    echo "📂 Searching for Podfile in project:"
+    find "$PROJECT_ROOT" -name "Podfile" -type f 2>/dev/null || echo "No Podfile found in project"
     exit 1
 fi
+
+# Final verification
+echo "🔍 Final project structure verification"
+echo "📊 Project structure summary:"
+echo "  - Project Root: $PROJECT_ROOT"
+echo "  - iOS Directory: $IOS_DIR"
+echo "  - Podfile exists: $([ -f "$IOS_DIR/Podfile" ] && echo '✅ Yes' || echo '❌ No')"
+echo "  - Pods directory exists: $([ -d "$IOS_DIR/Pods" ] && echo '✅ Yes' || echo '❌ No')"
+echo "  - Xcode project exists: $([ -f "$IOS_DIR"/*.xcodeproj/project.pbxproj ] && echo '✅ Yes' || echo '❌ No')"
+echo "  - Xcode workspace exists: $([ -f "$IOS_DIR"/*.xcworkspace/contents.xcworkspacedata ] && echo '✅ Yes' || echo '❌ No')"
 
 echo "🎉 Post-clone script completed successfully"
 echo "📍 Final working directory: $(pwd)"
@@ -279,7 +301,6 @@ echo "  - System: $(uname -a)"
 echo "  - Node.js: $(node --version)"
 echo "  - npm: $(npm --version)"
 echo "  - Expo CLI: $(expo --version 2>/dev/null || echo 'Not available in PATH')"
-echo "  - EAS CLI: $(eas --version 2>/dev/null || echo 'Not available')"
 echo "  - CocoaPods: $(pod --version 2>/dev/null || echo 'Not available')"
 echo "  - Project Root: $PROJECT_ROOT"
 echo "  - iOS Directory: $IOS_DIR"
