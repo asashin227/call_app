@@ -316,9 +316,9 @@ else
     echo "❌ Global expo not available for Method 3"
 fi
 
-# Method 4: Enhanced manual iOS project creation
+# Method 4: Enhanced manual iOS project creation with proper Expo integration
 if [ "$EXPO_SUCCESS" = false ]; then
-    echo "🔄 Method 4: Enhanced manual iOS project creation"
+    echo "🔄 Method 4: Enhanced manual iOS project creation with Expo integration"
     
     # Check if we can skip prebuild by using existing iOS directory
     if [ -d "/Volumes/workspace/repository/ios" ] && [ -f "/Volumes/workspace/repository/ios/Podfile" ]; then
@@ -327,8 +327,8 @@ if [ "$EXPO_SUCCESS" = false ]; then
     else
         echo "❌ No existing iOS directory found"
         
-        # Create enhanced iOS structure manually
-        echo "🔧 Creating enhanced iOS structure with proper React Native integration"
+        # Create enhanced iOS structure manually with proper Expo integration
+        echo "🔧 Creating enhanced iOS structure with proper Expo + React Native integration"
         mkdir -p ios
         cd ios
         
@@ -339,7 +339,7 @@ if [ "$EXPO_SUCCESS" = false ]; then
         fi
         echo "📱 Using app name: $APP_NAME"
         
-        # Create an improved Podfile with proper React Native CLI integration
+        # Create an improved Podfile with proper Expo autolinking and React Native CLI integration
         cat > Podfile << EOF
 # Resolve react_native_pods.rb with node to allow for hoisting
 require Pod::Executable.execute_command('node', ['-p',
@@ -348,30 +348,96 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+# Resolve expo autolinking with node
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "expo/scripts/autolinking.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
 platform :ios, '13.0'
 install! 'cocoapods', :deterministic_uuids => false
 
-# Force bundler to use system gem
-if respond_to?(:install!) && defined?(Bundler)
-  install! 'cocoapods', :deterministic_uuids => false
-end
-
 target '$APP_NAME' do
+  # First, call use_expo_modules! to enable Expo modules
+  use_expo_modules!
+  
+  # Then, configure React Native modules
   config = use_native_modules!
 
+  # Configure React Native with proper options for current version
   use_react_native!(
     :path => config[:reactNativePath],
+    # Hermes is enabled by default. Disable by setting this flag to false.
+    # Upcoming versions of React Native may rely on get_default_flags(), but
+    # we make it explicit here to aid in the React Native upgrade process.
+    :hermes_enabled => true,
+    :fabric_enabled => false,
     # Enables Flipper.
-    #
     # Note that if you have use_frameworks! enabled, Flipper will not work and
     # you should disable the next line.
-    :flipper_configuration => false,
+    :flipper_configuration => FlipperConfiguration.enabled,
     # An absolute path to your application root.
     :app_path => "$PROJECT_ROOT"
   )
 
   post_install do |installer|
-    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      # Set `mac_catalyst_enabled` to `true` in order to apply patches
+      # necessary for Mac Catalyst builds
+      :mac_catalyst_enabled => false
+    )
+    
+    # https://github.com/expo/expo/blob/main/packages/expo-modules-core/ios/ExpoModulesCore.podspec
+    installer.pods_project.targets.each do |target|
+      if target.name == 'ExpoModulesCore'
+        target.build_configurations.each do |config|
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'EX_DEV=\$(CONFIGURATION)'
+        end
+      end
+    end
+  end
+end
+EOF
+
+        # Check if we need to use alternative Podfile without FlipperConfiguration
+        if ! grep -q "FlipperConfiguration" "$PROJECT_ROOT/node_modules/react-native/scripts/react_native_pods.rb" 2>/dev/null; then
+            echo "⚠️ FlipperConfiguration not available in this React Native version, using alternative Podfile"
+            cat > Podfile << EOF
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+# Resolve expo autolinking with node
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "expo/scripts/autolinking.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, '13.0'
+install! 'cocoapods', :deterministic_uuids => false
+
+target '$APP_NAME' do
+  # First, call use_expo_modules! to enable Expo modules
+  use_expo_modules!
+  
+  # Then, configure React Native modules
+  config = use_native_modules!
+
+  # Configure React Native with basic options (without flipper_configuration)
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true
+  )
+
+  post_install do |installer|
     react_native_post_install(
       installer,
       config[:reactNativePath],
@@ -380,6 +446,7 @@ target '$APP_NAME' do
   end
 end
 EOF
+        fi
 
         # Create basic iOS app structure
         mkdir -p "$APP_NAME"
@@ -443,6 +510,7 @@ EOF
         cat > "$APP_NAME/AppDelegate.swift" << EOF
 import UIKit
 import React
+import ExpoModulesCore
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -481,9 +549,9 @@ extension AppDelegate: RCTBridgeDelegate {
 EOF
         
         if [ -f "Podfile" ]; then
-            echo "✅ Enhanced Podfile created with proper React Native CLI integration"
+            echo "✅ Enhanced Podfile created with proper Expo autolinking integration"
             echo "📄 Podfile preview:"
-            head -n 20 Podfile
+            head -n 25 Podfile
             EXPO_SUCCESS=true
         else
             echo "❌ Failed to create enhanced Podfile"
@@ -545,8 +613,8 @@ cd "$IOS_DIR"
 # Verify we're in the ios directory and Podfile exists
 if [ -f "Podfile" ]; then
     echo "✅ Found Podfile in: $(pwd)"
-    echo "📄 Podfile preview (first 15 lines):"
-    head -n 15 Podfile
+    echo "📄 Podfile preview (first 20 lines):"
+    head -n 20 Podfile
     
     # Verify CocoaPods is available
     if command -v pod &> /dev/null; then
@@ -564,6 +632,15 @@ if [ -f "Podfile" ]; then
     echo "🔧 Configuring Node path for CocoaPods"
     export NODE_BINARY=$(which node)
     echo "📍 NODE_BINARY set to: $NODE_BINARY"
+    
+    # Verify Expo autolinking script is available
+    echo "🔍 Verifying Expo autolinking availability"
+    if [ -f "$PROJECT_ROOT/node_modules/expo/scripts/autolinking.rb" ]; then
+        echo "✅ Expo autolinking script found"
+    else
+        echo "⚠️ Expo autolinking script not found, this may cause issues"
+        ls -la "$PROJECT_ROOT/node_modules/expo/scripts/" 2>/dev/null || echo "Expo scripts directory not found"
+    fi
     
     # Install pods with verbose output
     echo "📦 Running pod install with verbose output"
@@ -588,8 +665,10 @@ if [ -f "Podfile" ]; then
             echo "❌ CocoaPods installation failed even with fixes"
             echo "📜 Podfile content for debugging:"
             cat Podfile
-            echo "📦 Available node_modules packages:"
-            ls -la "$PROJECT_ROOT/node_modules" | grep react | head -n 10
+            echo "📦 Available node_modules packages (React Native related):"
+            ls -la "$PROJECT_ROOT/node_modules" | grep -E "(react|expo)" | head -n 15
+            echo "📦 Expo modules in node_modules:"
+            ls -la "$PROJECT_ROOT/node_modules" | grep expo | head -n 10
             exit 1
         fi
     fi
@@ -599,6 +678,10 @@ if [ -f "Podfile" ]; then
         echo "✅ Pods directory successfully created"
         echo "📊 Pods installation summary:"
         ls -la Pods/ | head -n 15
+        
+        # Check for specific pods
+        echo "📋 Installed pods check:"
+        ls -1 Pods/ | grep -E "(Expo|RNCallKeep)" | head -n 10 || echo "No specific pods found"
     else
         echo "❌ Pods directory not found after pod install"
         exit 1
@@ -623,6 +706,7 @@ echo "  - Pods directory exists: $([ -d "$IOS_DIR/Pods" ] && echo '✅ Yes' || e
 echo "  - Xcode project exists: $(find "$IOS_DIR" -name "*.xcodeproj" -type d | head -n 1 | xargs test -d && echo '✅ Yes' || echo '❌ No')"
 echo "  - Xcode workspace exists: $(find "$IOS_DIR" -name "*.xcworkspace" -type d | head -n 1 | xargs test -d && echo '✅ Yes' || echo '❌ No')"
 echo "  - React Native CLI available: $([ -f "$PROJECT_ROOT/node_modules/@react-native-community/cli/build/bin.js" ] && echo '✅ Yes' || echo '❌ No')"
+echo "  - Expo autolinking script: $([ -f "$PROJECT_ROOT/node_modules/expo/scripts/autolinking.rb" ] && echo '✅ Yes' || echo '❌ No')"
 
 echo "🎉 Post-clone script completed successfully"
 echo "📍 Final working directory: $(pwd)"
