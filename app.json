@@ -15,6 +15,7 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "このアプリは通話機能にマイクを使用します。CallKitやWebRTC通話にはマイクのアクセス権が必要です。",
+        "NSCameraUsageDescription": "QRコードをスキャンしてWebRTC接続情報を読み取るためにカメラを使用します。",
         "UIBackgroundModes": ["voip"],
         "CFBundleDisplayName": "Call App",
         "ITSAppUsesNonExemptEncryption": false
@@ -31,6 +32,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "dev.asashin227.callapp",
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.WAKE_LOCK"
@@ -44,6 +46,12 @@
       "expo-router",
       "expo-av",
       "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "QRコードをスキャンしてWebRTC接続情報を読み取るためにカメラを使用します。"
+        }
+      ],
       [
         "expo-splash-screen",
         {
