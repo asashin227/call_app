@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { audioService } from '@/services/AudioService';
+import { webRTCService } from '@/services/WebRTCService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -66,10 +67,18 @@ export default function RootLayout() {
             console.error('❌ CallKit: Failed to play connected audio:', audioError);
           }
           
-          // 通話応答処理 - 実際のアプリでは通話開始処理を実装
+          // 通話応答処理
           try {
             if (data.callUUID) {
+              // CallKeepの通話をアクティブに設定
               RNCallKeep.setCurrentCallActive(data.callUUID);
+              
+              // WebRTCServiceのCallKeep UUIDと一致するか確認
+              const currentUUID = webRTCService.getCallKeepUUID();
+              if (currentUUID === data.callUUID) {
+                console.log('✅ CallKit: CallKeep answer event matched with current call');
+                // 必要に応じて追加の処理を実行
+              }
             } else {
               console.warn('⚠️ CallKit: No callUUID in answerCall');
             }
@@ -92,6 +101,15 @@ export default function RootLayout() {
           // 通話終了処理
           try {
             if (data.callUUID) {
+              // WebRTCServiceのCallKeep UUIDと一致するか確認
+              const currentUUID = webRTCService.getCallKeepUUID();
+              if (currentUUID === data.callUUID) {
+                console.log('✅ CallKit: Ending WebRTC call that matches CallKeep UUID');
+                // WebRTCの通話を終了
+                await webRTCService.endCall();
+              }
+              
+              // CallKeepの通話を終了
               RNCallKeep.endCall(data.callUUID);
             } else {
               console.warn('⚠️ CallKit: No callUUID in endCall');
@@ -168,6 +186,29 @@ export default function RootLayout() {
 
         RNCallKeep.addEventListener('didPerformSetMutedCallAction', (data) => {
           console.log('🔇 CallKit: Set muted -', data);
+          
+          // WebRTCServiceのミュート状態を更新
+          try {
+            if (data.callUUID) {
+              const currentUUID = webRTCService.getCallKeepUUID();
+              if (currentUUID === data.callUUID) {
+                console.log(`🔇 CallKit: Updating WebRTC mute state to: ${data.muted}`);
+                
+                // 現在のミュート状態を取得して必要に応じて切り替え
+                const localStream = webRTCService.getCurrentLocalStream();
+                if (localStream) {
+                  const audioTrack = localStream.getAudioTracks()[0];
+                  if (audioTrack) {
+                    // data.mutedがtrueならミュート、falseならミュート解除
+                    audioTrack.enabled = !data.muted;
+                    console.log(`✅ CallKit: Audio track enabled set to: ${audioTrack.enabled}`);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('❌ CallKit: Failed to update mute state:', error);
+          }
         });
 
       } catch (error) {

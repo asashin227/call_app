@@ -53,6 +53,10 @@ class WebRTCService {
   private onCallStatusChangeCallback?: (status: CallData['status']) => void;
   private onIceCandidateCallback?: (candidate: RTCIceCandidate) => void;
   private onErrorCallback?: (error: Error) => void;
+  private onConnectionEstablishedCallback?: () => void;
+  
+  // CallKeep UUID
+  private callKeepUUID?: string;
 
   constructor() {
     console.log('🎥 WebRTCService: Initializing...');
@@ -65,12 +69,28 @@ class WebRTCService {
     onCallStatusChange?: (status: CallData['status']) => void;
     onIceCandidate?: (candidate: RTCIceCandidate) => void;
     onError?: (error: Error) => void;
+    onConnectionEstablished?: () => void;
   }) {
     this.onLocalStreamCallback = callbacks.onLocalStream;
     this.onRemoteStreamCallback = callbacks.onRemoteStream;
     this.onCallStatusChangeCallback = callbacks.onCallStatusChange;
     this.onIceCandidateCallback = callbacks.onIceCandidate;
     this.onErrorCallback = callbacks.onError;
+    this.onConnectionEstablishedCallback = callbacks.onConnectionEstablished;
+  }
+  
+  // CallKeep UUIDを設定/取得
+  setCallKeepUUID(uuid: string) {
+    this.callKeepUUID = uuid;
+    console.log('📞 WebRTCService: CallKeep UUID set:', uuid);
+  }
+  
+  getCallKeepUUID(): string | undefined {
+    return this.callKeepUUID;
+  }
+  
+  clearCallKeepUUID() {
+    this.callKeepUUID = undefined;
   }
 
   // ローカルストリームを取得
@@ -151,6 +171,11 @@ class WebRTCService {
         switch (pc.connectionState) {
           case 'connected':
             this.updateCallStatus('connected');
+            // 接続確立時のコールバックを呼び出す
+            if (this.onConnectionEstablishedCallback) {
+              console.log('🎉 WebRTCService: Connection established! Calling callback...');
+              this.onConnectionEstablishedCallback();
+            }
             break;
           case 'disconnected':
           case 'failed':
@@ -391,6 +416,9 @@ class WebRTCService {
     }
     this.currentCall = null;
     this.isInitiator = false;
+    
+    // CallKeep UUIDをクリア
+    this.clearCallKeepUUID();
 
     console.log('✅ WebRTCService: Cleanup completed');
   }
