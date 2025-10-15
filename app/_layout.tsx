@@ -1,13 +1,15 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Modal } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
 import 'react-native-reanimated';
 
+import CallScreen from '@/components/CallScreen';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { audioService } from '@/services/AudioService';
-import { webRTCService } from '@/services/WebRTCService';
+import { CallData, webRTCService } from '@/services/WebRTCService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -15,6 +17,71 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [showCallScreen, setShowCallScreen] = useState(false);
+  const [activeCallData, setActiveCallData] = useState<CallData | null>(null);
+
+  // WebRTCの通話状態を監視してCallScreenを表示
+  useEffect(() => {
+    // 通話状態変更のリスナーを追加
+    let statusChangeListener: ((status: string) => void) | null = null;
+    
+    statusChangeListener = (status: string) => {
+      console.log('🔄 RootLayout: Call status changed to:', status);
+      
+      if (status === 'connected') {
+        // 通話が確立したらCallScreenを表示
+        // WebRTCServiceから現在の通話データを取得
+        const currentCallData = webRTCService.getCurrentCall();
+        if (currentCallData) {
+          setActiveCallData(currentCallData);
+          setShowCallScreen(true);
+        } else {
+          // フォールバック: CallDataを構築
+          const callData: CallData = {
+            id: webRTCService.getCallKeepUUID() || 'unknown',
+            targetUser: 'Manual Peer',
+            type: 'outgoing',
+            status: 'connected',
+            hasVideo: false,
+          };
+          setActiveCallData(callData);
+          setShowCallScreen(true);
+        }
+      } else if (status === 'ended' || status === 'failed') {
+        // 通話が終了したらCallScreenを非表示
+        setShowCallScreen(false);
+        setActiveCallData(null);
+      }
+    };
+
+    // 定期的にWebRTCServiceの通話状態をチェック
+    const checkInterval = setInterval(() => {
+      const currentCallData = webRTCService.getCurrentCall();
+      if (currentCallData && currentCallData.status === 'connected' && !showCallScreen) {
+        console.log('🔄 RootLayout: Detected connected call via polling');
+        setActiveCallData(currentCallData);
+        setShowCallScreen(true);
+      } else if (!currentCallData && showCallScreen) {
+        console.log('🔄 RootLayout: Call ended detected via polling');
+        setShowCallScreen(false);
+        setActiveCallData(null);
+      }
+    }, 1000); // 1秒ごとにチェック
+
+    return () => {
+      // クリーンアップ
+      clearInterval(checkInterval);
+      statusChangeListener = null;
+    };
+  }, [showCallScreen]);
+
+  // CallScreenを閉じる処理
+  const handleEndCall = () => {
+    setShowCallScreen(false);
+    setActiveCallData(null);
+    // WebRTCServiceをクリーンアップ（ManualSignalingContextのresetと同等）
+    webRTCService.endCall();
+  };
 
   // CallKitの初期設定をアプリ起動時に実行
   useEffect(() => {
@@ -248,6 +315,21 @@ export default function RootLayout() {
         <Stack.Screen name="manual-signaling" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
+      
+      {/* グローバル通話画面モーダル */}
+      <Modal
+        visible={showCallScreen && activeCallData !== null}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleEndCall}
+      >
+        {activeCallData && (
+          <CallScreen
+            callData={activeCallData}
+            onEndCall={handleEndCall}
+          />
+        )}
+      </Modal>
     </ThemeProvider>
   );
 }
