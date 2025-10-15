@@ -111,7 +111,21 @@ export default function CallerStep3() {
           <View style={styles.content}>
           {/* あなたのICE候補 */}
           <View style={styles.section}>
-            <Text style={styles.stepTitle}>Step 3a: あなたのICE候補</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.stepTitle}>Step 3a: あなたのICE候補</Text>
+              {connectionInfo.localIceCandidates.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => copyToClipboard(
+                    JSON.stringify(connectionInfo.localIceCandidates),
+                    'すべてのICE候補'
+                  )}
+                  style={styles.copyAllButton}
+                >
+                  <Ionicons name="copy" size={18} color="#fff" />
+                  <Text style={styles.copyAllButtonText}>全てコピー</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.stepDesc}>
               これらを相手に送信してください（{connectionInfo.localIceCandidates.length}個）
             </Text>
@@ -199,11 +213,16 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   stepTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
   },
   stepDesc: {
     fontSize: 14,
@@ -284,6 +303,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
+  },
+  copyAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  copyAllButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

@@ -1,6 +1,7 @@
 import CallScreen from '@/components/CallScreen';
 import { useManualSignaling } from '@/contexts/ManualSignalingContext';
 import { webRTCService } from '@/services/WebRTCService';
+import { compressForQRCode } from '@/utils/qrcode';
 import { Ionicons } from '@expo/vector-icons';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { router } from 'expo-router';
@@ -8,6 +9,7 @@ import React, { useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -17,11 +19,13 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function CallerStep1() {
   const { connectionInfo, setConnectionInfo, currentCall, setCurrentCall } = useManualSignaling();
   const [showOfferText, setShowOfferText] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
 
   const generateOffer = async () => {
     try {
@@ -38,22 +42,11 @@ export default function CallerStep1() {
           const offer = pc.localDescription;
           setConnectionInfo(prev => ({ ...prev, offer }));
           
-          // ICE候補の収集を開始
-          pc.onicecandidate = (event: any) => {
-            if (event.candidate) {
-              console.log('🧊 ICE candidate generated');
-              setConnectionInfo(prev => ({
-                ...prev,
-                localIceCandidates: [...prev.localIceCandidates, event.candidate],
-              }));
-            } else {
-              console.log('✅ ICE gathering completed');
-            }
-          };
+          // ICE候補はManualSignalingContextのonIceCandidateコールバックで自動収集される
           
           Alert.alert(
             '✅ Offer生成完了',
-            '下に表示されているOfferをコピーして相手に送信してください。\n\n相手からAnswerが届いたら次のステップに進んでください。'
+            '下に表示されているOfferをコピーして相手に送信してください。\n\nICE候補も自動的に収集されています。\n\n相手からAnswerが届いたら次のステップに進んでください。'
           );
         }
         setIsGenerating(false);
@@ -121,16 +114,23 @@ export default function CallerStep1() {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.stepTitle}>📤 あなたのOffer</Text>
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={() => copyToClipboard(JSON.stringify(connectionInfo.offer), 'Offer')}
-                  >
-                    <Ionicons name="copy-outline" size={20} color="#007AFF" />
-                    <Text style={styles.copyButtonText}>コピー</Text>
-                  </TouchableOpacity>
+                  <View style={styles.buttonGroup}>
+                    <TouchableOpacity
+                      style={styles.qrButton}
+                      onPress={() => setShowQRModal(true)}
+                    >
+                      <Ionicons name="qr-code-outline" size={18} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.copyButton}
+                      onPress={() => copyToClipboard(JSON.stringify(connectionInfo.offer), 'Offer')}
+                    >
+                      <Ionicons name="copy-outline" size={18} color="#007AFF" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <Text style={styles.infoLabel}>
-                  下のテキストをコピーして相手に送信してください
+                  QRコードまたはテキストをコピーして相手に送信してください
                 </Text>
                 
                 {/* テキスト表示（折りたたみ可能） */}
@@ -172,6 +172,43 @@ export default function CallerStep1() {
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* QRコード表示モーダル */}
+      <Modal
+        visible={showQRModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowQRModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowQRModal(false)}
+        >
+          <View style={styles.qrModalContent}>
+            <Text style={styles.qrModalTitle}>Offer QRコード</Text>
+            <Text style={styles.qrModalDesc}>
+              相手にこのQRコードをスキャンしてもらってください
+            </Text>
+            {connectionInfo.offer && (
+              <View style={styles.qrCodeContainer}>
+                <QRCode
+                  value={compressForQRCode(connectionInfo.offer)}
+                  size={250}
+                  backgroundColor="white"
+                  ecl="L"
+                />
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowQRModal(false)}
+            >
+              <Text style={styles.closeButtonText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -278,6 +315,61 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  qrButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qrModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 400,
+  },
+  qrModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  qrModalDesc: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  qrCodeContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  closeButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

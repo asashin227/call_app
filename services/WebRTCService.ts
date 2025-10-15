@@ -1,11 +1,26 @@
 import {
-    MediaStream,
-    RTCConfiguration,
-    RTCIceCandidate,
-    RTCPeerConnection,
-    RTCSessionDescription,
-    getUserMedia
+  MediaStream,
+  RTCIceCandidate,
+  RTCPeerConnection,
+  RTCSessionDescription,
+  mediaDevices
 } from 'react-native-webrtc';
+
+// react-native-webrtcの型定義（型定義ファイルから直接エクスポートされていないもの）
+type RTCIceServer = {
+  credential?: string;
+  url?: string;
+  urls?: string | string[];
+  username?: string;
+};
+
+type RTCConfiguration = {
+  bundlePolicy?: 'balanced' | 'max-compat' | 'max-bundle';
+  iceCandidatePoolSize?: number;
+  iceServers?: RTCIceServer[];
+  iceTransportPolicy?: 'all' | 'relay';
+  rtcpMuxPolicy?: 'negotiate' | 'require';
+};
 
 export interface CallData {
   id: string;
@@ -13,14 +28,6 @@ export interface CallData {
   type: 'outgoing' | 'incoming';
   hasVideo: boolean;
   status: 'initiating' | 'ringing' | 'connected' | 'ended' | 'failed';
-}
-
-export interface SignalingMessage {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'call-request' | 'call-accept' | 'call-reject' | 'call-end';
-  callId: string;
-  from: string;
-  to: string;
-  data?: any;
 }
 
 class WebRTCService {
@@ -44,6 +51,7 @@ class WebRTCService {
   private onLocalStreamCallback?: (stream: MediaStream) => void;
   private onRemoteStreamCallback?: (stream: MediaStream) => void;
   private onCallStatusChangeCallback?: (status: CallData['status']) => void;
+  private onIceCandidateCallback?: (candidate: RTCIceCandidate) => void;
   private onErrorCallback?: (error: Error) => void;
 
   constructor() {
@@ -55,11 +63,13 @@ class WebRTCService {
     onLocalStream?: (stream: MediaStream) => void;
     onRemoteStream?: (stream: MediaStream) => void;
     onCallStatusChange?: (status: CallData['status']) => void;
+    onIceCandidate?: (candidate: RTCIceCandidate) => void;
     onError?: (error: Error) => void;
   }) {
     this.onLocalStreamCallback = callbacks.onLocalStream;
     this.onRemoteStreamCallback = callbacks.onRemoteStream;
     this.onCallStatusChangeCallback = callbacks.onCallStatusChange;
+    this.onIceCandidateCallback = callbacks.onIceCandidate;
     this.onErrorCallback = callbacks.onError;
   }
 
@@ -82,7 +92,7 @@ class WebRTCService {
         } : false,
       };
 
-      const stream = await getUserMedia(constraints);
+      const stream = await mediaDevices.getUserMedia(constraints);
       this.localStream = stream;
 
       console.log('✅ WebRTCService: Local stream obtained');
@@ -111,31 +121,31 @@ class WebRTCService {
       const pc = new RTCPeerConnection(this.configuration);
 
       // ICE候補イベント
-      pc.onicecandidate = (event) => {
+      pc.addEventListener('icecandidate', (event) => {
         if (event.candidate && this.currentCall) {
           console.log('🧊 WebRTCService: ICE candidate generated');
-          // シグナリングサーバーに送信（後で実装）
-          this.sendSignalingMessage({
-            type: 'ice-candidate',
-            callId: this.currentCall.id,
-            from: 'local', // 実際のユーザーIDに置き換え
-            to: this.currentCall.targetUser,
-            data: event.candidate,
-          });
+          // コールバックでアプリ側に通知（手動シグナリング用）
+          if (this.onIceCandidateCallback) {
+            this.onIceCandidateCallback(event.candidate);
+          }
+        } else if (!event.candidate) {
+          console.log('✅ WebRTCService: ICE gathering completed');
         }
-      };
+      });
 
-      // リモートストリームイベント
-      pc.onaddstream = (event) => {
-        console.log('📡 WebRTCService: Remote stream received');
-        this.remoteStream = event.stream;
-        if (this.onRemoteStreamCallback) {
-          this.onRemoteStreamCallback(event.stream);
+      // リモートトラックイベント（新しいWebRTC API）
+      pc.addEventListener('track', (event) => {
+        console.log('📡 WebRTCService: Remote track received');
+        if (event.streams && event.streams[0]) {
+          this.remoteStream = event.streams[0];
+          if (this.onRemoteStreamCallback) {
+            this.onRemoteStreamCallback(event.streams[0]);
+          }
         }
-      };
+      });
 
       // 接続状態変更イベント
-      pc.onconnectionstatechange = () => {
+      pc.addEventListener('connectionstatechange', () => {
         console.log('🔗 WebRTCService: Connection state:', pc.connectionState);
         
         switch (pc.connectionState) {
@@ -148,12 +158,12 @@ class WebRTCService {
             this.updateCallStatus('ended');
             break;
         }
-      };
+      });
 
       // ICE接続状態変更イベント
-      pc.oniceconnectionstatechange = () => {
+      pc.addEventListener('iceconnectionstatechange', () => {
         console.log('🧊 WebRTCService: ICE connection state:', pc.iceConnectionState);
-      };
+      });
 
       this.peerConnection = pc;
       return pc;
@@ -187,7 +197,10 @@ class WebRTCService {
 
       // ローカルストリームを追加
       if (this.localStream) {
-        pc.addStream(this.localStream);
+        const stream = this.localStream;
+        stream.getTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
       }
 
       // オファーを作成
@@ -198,17 +211,8 @@ class WebRTCService {
 
       await pc.setLocalDescription(offer);
 
-      // シグナリングメッセージを送信
-      this.sendSignalingMessage({
-        type: 'call-request',
-        callId,
-        from: 'local', // 実際のユーザーIDに置き換え
-        to: targetUser,
-        data: {
-          offer: offer,
-          hasVideo,
-        },
-      });
+      // 手動シグナリングの場合、Offerはpc.localDescriptionから取得
+      // アプリ側（手動シグナリング画面）で取得・QRコード表示・送信
 
       this.updateCallStatus('ringing');
 
@@ -241,7 +245,10 @@ class WebRTCService {
 
       // ローカルストリームを追加
       if (this.localStream) {
-        pc.addStream(this.localStream);
+        const stream = this.localStream;
+        stream.getTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
       }
 
       // リモートオファーを設定
@@ -251,14 +258,8 @@ class WebRTCService {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      // シグナリングメッセージを送信
-      this.sendSignalingMessage({
-        type: 'call-accept',
-        callId: callData.id,
-        from: 'local', // 実際のユーザーIDに置き換え
-        to: callData.targetUser,
-        data: { answer },
-      });
+      // 手動シグナリングの場合、Answerはpc.localDescriptionから取得
+      // アプリ側（手動シグナリング画面）で取得・QRコード表示・送信
 
       this.updateCallStatus('connected');
 
@@ -279,71 +280,14 @@ class WebRTCService {
     try {
       console.log('🔚 WebRTCService: Ending call...');
 
-      if (this.currentCall) {
-        // シグナリングメッセージを送信
-        this.sendSignalingMessage({
-          type: 'call-end',
-          callId: this.currentCall.id,
-          from: 'local', // 実際のユーザーIDに置き換え
-          to: this.currentCall.targetUser,
-        });
-      }
-
+      // 手動シグナリングの場合、通話終了はローカルでのクリーンアップのみ
+      
       this.cleanup();
       console.log('✅ WebRTCService: Call ended successfully');
 
     } catch (error) {
       console.error('❌ WebRTCService: Failed to end call:', error);
       this.cleanup();
-    }
-  }
-
-  // シグナリングメッセージを処理
-  async handleSignalingMessage(message: SignalingMessage): Promise<void> {
-    try {
-      console.log('📨 WebRTCService: Handling signaling message:', message.type);
-
-      if (!this.peerConnection) {
-        console.warn('⚠️ WebRTCService: No peer connection available for signaling message');
-        return;
-      }
-
-      switch (message.type) {
-        case 'offer':
-          await this.peerConnection.setRemoteDescription(message.data);
-          const answer = await this.peerConnection.createAnswer();
-          await this.peerConnection.setLocalDescription(answer);
-          
-          this.sendSignalingMessage({
-            type: 'answer',
-            callId: message.callId,
-            from: 'local',
-            to: message.from,
-            data: answer,
-          });
-          break;
-
-        case 'answer':
-          await this.peerConnection.setRemoteDescription(message.data);
-          this.updateCallStatus('connected');
-          break;
-
-        case 'ice-candidate':
-          const candidate = new RTCIceCandidate(message.data);
-          await this.peerConnection.addIceCandidate(candidate);
-          break;
-
-        case 'call-end':
-          this.updateCallStatus('ended');
-          this.cleanup();
-          break;
-      }
-
-    } catch (error) {
-      console.error('❌ WebRTCService: Failed to handle signaling message:', error);
-      if (this.onErrorCallback) {
-        this.onErrorCallback(error as Error);
-      }
     }
   }
 
@@ -390,8 +334,8 @@ class WebRTCService {
     return this.currentCall;
   }
 
-  // ローカルストリームを取得
-  getLocalStream(): MediaStream | null {
+  // ローカルストリームを取得（現在のストリーム）
+  getCurrentLocalStream(): MediaStream | null {
     return this.localStream;
   }
 
@@ -415,12 +359,6 @@ class WebRTCService {
         this.onCallStatusChangeCallback(status);
       }
     }
-  }
-
-  private sendSignalingMessage(message: SignalingMessage): void {
-    // TODO: 実際のシグナリングサーバーに送信
-    // 今は仮実装でログ出力のみ
-    console.log('📡 WebRTCService: Sending signaling message:', message.type, message);
   }
 
   private cleanup(): void {

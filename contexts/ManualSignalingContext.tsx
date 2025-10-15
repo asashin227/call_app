@@ -45,6 +45,14 @@ export function ManualSignalingProvider({ children }: { children: React.ReactNod
       onCallStatusChange: (status) => {
         console.log('📱 Call status:', status);
       },
+      onIceCandidate: (candidate) => {
+        console.log('🧊 ICE candidate received in context');
+        // ローカルICE候補を収集
+        setConnectionInfo(prev => ({
+          ...prev,
+          localIceCandidates: [...prev.localIceCandidates, candidate],
+        }));
+      },
       onError: (error) => {
         console.error('❌ WebRTC error:', error);
       },

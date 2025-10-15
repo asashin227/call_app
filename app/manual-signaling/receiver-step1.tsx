@@ -1,12 +1,15 @@
 import { useManualSignaling } from '@/contexts/ManualSignalingContext';
 import { webRTCService } from '@/services/WebRTCService';
+import { compressForQRCode, decompressFromQRCode } from '@/utils/qrcode';
 import { Ionicons } from '@expo/vector-icons';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { CameraView } from 'expo-camera';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -16,11 +19,32 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function ReceiverStep1() {
   const { offerInput, setOfferInput, connectionInfo, setConnectionInfo, setCurrentCall } = useManualSignaling();
   const [showAnswerText, setShowAnswerText] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
+
+  const handleQRCodeScanned = (data: string) => {
+    if (!isScanning) return; // 既に読み取り済みの場合は何もしない
+    
+    setIsScanning(false); // スキャンを停止
+    
+    try {
+      const decompressed = decompressFromQRCode(data);
+      setOfferInput(JSON.stringify(decompressed));
+      setShowQRScanner(false);
+      Alert.alert('✅ QRコード読み取り成功', 'Offerが入力されました');
+    } catch (error) {
+      console.error('Failed to process QR code:', error);
+      setShowQRScanner(false);
+      Alert.alert('エラー', 'QRコードの読み取りに失敗しました');
+    }
+  };
 
   const receiveOffer = async () => {
     try {
@@ -54,20 +78,11 @@ export default function ReceiverStep1() {
           const answer = pc.localDescription;
           setConnectionInfo(prev => ({ ...prev, answer }));
           
-          // ICE候補の収集を開始
-          pc.onicecandidate = (event: any) => {
-            if (event.candidate) {
-              console.log('🧊 ICE candidate generated');
-              setConnectionInfo(prev => ({
-                ...prev,
-                localIceCandidates: [...prev.localIceCandidates, event.candidate],
-              }));
-            }
-          };
+          // ICE候補はManualSignalingContextのonIceCandidateコールバックで自動収集される
           
           Alert.alert(
             '✅ Answer生成完了',
-            '下に表示されているAnswerをコピーして相手に送信してください。',
+            '下に表示されているAnswerをコピーして相手に送信してください。\n\nICE候補も自動的に収集されています。'
           );
         }
         setIsProcessing(false);
@@ -103,8 +118,21 @@ export default function ReceiverStep1() {
             <View style={styles.section}>
               <Text style={styles.stepTitle}>Step 1: Offerを入力</Text>
               <Text style={styles.stepDesc}>
-                相手から受け取ったOfferを貼り付けてください
+                相手から受け取ったOfferをQRコードでスキャンまたは貼り付けてください
               </Text>
+              
+              <TouchableOpacity
+                style={styles.scanButton}
+                onPress={() => {
+                  setIsScanning(true);
+                  setShowQRScanner(true);
+                }}
+              >
+                <Ionicons name="qr-code-outline" size={24} color="#fff" />
+                <Text style={styles.scanButtonText}>QRコードをスキャン</Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.orText}>または</Text>
               
               <TextInput
                 style={styles.textInput}
@@ -134,16 +162,23 @@ export default function ReceiverStep1() {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.stepTitle}>📤 あなたのAnswer</Text>
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={() => copyToClipboard(JSON.stringify(connectionInfo.answer), 'Answer')}
-                  >
-                    <Ionicons name="copy-outline" size={20} color="#007AFF" />
-                    <Text style={styles.copyButtonText}>コピー</Text>
-                  </TouchableOpacity>
+                  <View style={styles.buttonGroup}>
+                    <TouchableOpacity
+                      style={styles.qrButton}
+                      onPress={() => setShowQRModal(true)}
+                    >
+                      <Ionicons name="qr-code-outline" size={18} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.copyButton}
+                      onPress={() => copyToClipboard(JSON.stringify(connectionInfo.answer), 'Answer')}
+                    >
+                      <Ionicons name="copy-outline" size={18} color="#007AFF" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <Text style={styles.infoLabel}>
-                  下のテキストをコピーして相手に送信してください
+                  QRコードまたはテキストをコピーして相手に送信してください
                 </Text>
                 
                 {/* テキスト表示（折りたたみ可能） */}
@@ -185,6 +220,85 @@ export default function ReceiverStep1() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* QRコードスキャナーモーダル */}
+      <Modal
+        visible={showQRScanner}
+        animationType="slide"
+        onRequestClose={() => {
+          setIsScanning(true);
+          setShowQRScanner(false);
+        }}
+      >
+        <View style={styles.scannerContainer}>
+          <View style={styles.scannerHeader}>
+            <Text style={styles.scannerTitle}>QRコードをスキャン</Text>
+            <TouchableOpacity
+              style={styles.scannerCloseButton}
+              onPress={() => {
+                setIsScanning(true);
+                setShowQRScanner(false);
+              }}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ['qr'],
+            }}
+            onBarcodeScanned={({ data }) => {
+              if (data) {
+                handleQRCodeScanned(data);
+              }
+            }}
+          />
+          <View style={styles.scannerOverlay}>
+            <Text style={styles.scannerText}>
+              OfferのQRコードをフレーム内に収めてください
+            </Text>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* QRコード表示モーダル */}
+      <Modal
+        visible={showQRModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowQRModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowQRModal(false)}
+        >
+          <View style={styles.qrModalContent}>
+            <Text style={styles.qrModalTitle}>Answer QRコード</Text>
+            <Text style={styles.qrModalDesc}>
+              相手にこのQRコードをスキャンしてもらってください
+            </Text>
+            {connectionInfo.answer && (
+              <View style={styles.qrCodeContainer}>
+                <QRCode
+                  value={compressForQRCode(connectionInfo.answer)}
+                  size={250}
+                  backgroundColor="white"
+                  ecl="L"
+                />
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.qrCloseButton}
+              onPress={() => setShowQRModal(false)}
+            >
+              <Text style={styles.qrCloseButtonText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -302,6 +416,119 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  qrButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanButton: {
+    flexDirection: 'row',
+    backgroundColor: '#34C759',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  scanButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  orText: {
+    textAlign: 'center',
+    color: '#999',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  scannerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  scannerCloseButton: {
+    padding: 8,
+  },
+  camera: {
+    flex: 1,
+  },
+  scannerOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  scannerText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qrModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 400,
+  },
+  qrModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  qrModalDesc: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  qrCodeContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  qrCloseButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+  qrCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
