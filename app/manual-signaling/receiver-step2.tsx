@@ -1,11 +1,9 @@
-import CallScreen from '@/components/CallScreen';
 import { useManualSignaling } from '@/contexts/ManualSignalingContext';
 import { webRTCService } from '@/services/WebRTCService';
 import { generateUUID } from '@/utils/uuid';
 import { Ionicons } from '@expo/vector-icons';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -26,11 +24,8 @@ export default function ReceiverStep2() {
     setConnectionInfo,
     iceCandidateInput,
     setIceCandidateInput,
-    currentCall,
-    callKeepUUID,
     setCallKeepUUID,
   } = useManualSignaling();
-  const [isConnected, setIsConnected] = useState(false);
   const [hasShownAlert, setHasShownAlert] = useState(false);
 
   // 接続確立時のコールバックを設定
@@ -48,12 +43,10 @@ export default function ReceiverStep2() {
         // CallKeepで通話を開始（着信側として）
         RNCallKeep.startCall(uuid, 'Manual Peer', 'Manual Peer', 'generic', false);
         
-        // 即座に通話画面に遷移
-        setIsConnected(true);
-        console.log('🎉 Connection established! Navigating to call screen...');
-        router.push('/manual-signaling/call');
+        // 通話が接続されたことを通知（グローバルモーダルが自動で表示される）
+        console.log('🎉 Connection established! Call screen will be displayed automatically.');
         
-        // 遷移後にトースト風のアラートを表示（非ブロッキング）
+        // 非ブロッキングアラートを表示
         setTimeout(() => {
           Alert.alert(
             '通話開始',
@@ -73,27 +66,6 @@ export default function ReceiverStep2() {
       // クリーンアップ
     };
   }, [hasShownAlert, setCallKeepUUID]);
-
-  // 通話接続状態を監視（フォールバック）
-  useFocusEffect(
-    useCallback(() => {
-      const pc = (webRTCService as any).peerConnection;
-      if (pc) {
-        const checkConnection = () => {
-          if (pc.connectionState === 'connected' && !hasShownAlert) {
-            setIsConnected(true);
-            router.push('/manual-signaling/call');
-          }
-        };
-        
-        pc.addEventListener('connectionstatechange', checkConnection);
-        
-        return () => {
-          pc.removeEventListener('connectionstatechange', checkConnection);
-        };
-      }
-    }, [hasShownAlert])
-  );
 
   const addIceCandidate = async () => {
     try {
@@ -130,18 +102,6 @@ export default function ReceiverStep2() {
     Clipboard.setString(text);
     Alert.alert('コピー完了', `${label}をクリップボードにコピーしました`);
   };
-
-  // 通話中の場合はCallScreenを表示
-  if (isConnected && currentCall) {
-    return (
-      <CallScreen
-        callData={currentCall}
-        onEndCall={() => {
-          router.replace('/manual-signaling');
-        }}
-      />
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
