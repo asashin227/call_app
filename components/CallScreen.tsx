@@ -29,7 +29,7 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
   const [callStatus, setCallStatus] = useState<CallData['status']>(callData.status);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(callData.hasVideo);
-  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
+  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [callKeepUUID, setCallKeepUUID] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
         console.log('📞 CallScreen: Starting InCallManager for WebRTC');
         InCallManager.start({ media: 'audio', auto: false, ringback: '' });
         
-        // デフォルトでスピーカーをオンに設定
+        // デフォルトでイヤピースに設定（スピーカーオフ）
         InCallManager.setForceSpeakerphoneOn(isSpeakerEnabled);
         
         // WebRTCServiceからCallKeep UUIDを取得
