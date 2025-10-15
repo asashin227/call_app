@@ -82,7 +82,7 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
     setupEventListeners();
 
     // 既存のストリームを取得
-    const existingLocalStream = webRTCService.getLocalStream();
+    const existingLocalStream = webRTCService.getCurrentLocalStream();
     const existingRemoteStream = webRTCService.getRemoteStream();
 
     if (existingLocalStream) {

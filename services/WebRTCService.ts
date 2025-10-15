@@ -1,11 +1,25 @@
 import {
-    MediaStream,
-    RTCConfiguration,
-    RTCIceCandidate,
-    RTCPeerConnection,
-    RTCSessionDescription,
-    getUserMedia
+  MediaStream,
+  RTCPeerConnection,
+  RTCSessionDescription,
+  mediaDevices
 } from 'react-native-webrtc';
+
+// react-native-webrtcの型定義（型定義ファイルから直接エクスポートされていないもの）
+type RTCIceServer = {
+  credential?: string;
+  url?: string;
+  urls?: string | string[];
+  username?: string;
+};
+
+type RTCConfiguration = {
+  bundlePolicy?: 'balanced' | 'max-compat' | 'max-bundle';
+  iceCandidatePoolSize?: number;
+  iceServers?: RTCIceServer[];
+  iceTransportPolicy?: 'all' | 'relay';
+  rtcpMuxPolicy?: 'negotiate' | 'require';
+};
 
 export interface CallData {
   id: string;
@@ -74,7 +88,7 @@ class WebRTCService {
         } : false,
       };
 
-      const stream = await getUserMedia(constraints);
+      const stream = await mediaDevices.getUserMedia(constraints);
       this.localStream = stream;
 
       console.log('✅ WebRTCService: Local stream obtained');
@@ -103,24 +117,26 @@ class WebRTCService {
       const pc = new RTCPeerConnection(this.configuration);
 
       // ICE候補イベント
-      pc.onicecandidate = (event) => {
+      pc.addEventListener('icecandidate', (event) => {
         if (event.candidate && this.currentCall) {
           console.log('🧊 WebRTCService: ICE candidate generated');
           // 手動シグナリングの場合、アプリ側（手動シグナリング画面）でICE候補を収集
         }
-      };
+      });
 
-      // リモートストリームイベント
-      pc.onaddstream = (event) => {
-        console.log('📡 WebRTCService: Remote stream received');
-        this.remoteStream = event.stream;
-        if (this.onRemoteStreamCallback) {
-          this.onRemoteStreamCallback(event.stream);
+      // リモートトラックイベント（新しいWebRTC API）
+      pc.addEventListener('track', (event) => {
+        console.log('📡 WebRTCService: Remote track received');
+        if (event.streams && event.streams[0]) {
+          this.remoteStream = event.streams[0];
+          if (this.onRemoteStreamCallback) {
+            this.onRemoteStreamCallback(event.streams[0]);
+          }
         }
-      };
+      });
 
       // 接続状態変更イベント
-      pc.onconnectionstatechange = () => {
+      pc.addEventListener('connectionstatechange', () => {
         console.log('🔗 WebRTCService: Connection state:', pc.connectionState);
         
         switch (pc.connectionState) {
@@ -133,12 +149,12 @@ class WebRTCService {
             this.updateCallStatus('ended');
             break;
         }
-      };
+      });
 
       // ICE接続状態変更イベント
-      pc.oniceconnectionstatechange = () => {
+      pc.addEventListener('iceconnectionstatechange', () => {
         console.log('🧊 WebRTCService: ICE connection state:', pc.iceConnectionState);
-      };
+      });
 
       this.peerConnection = pc;
       return pc;
@@ -172,7 +188,10 @@ class WebRTCService {
 
       // ローカルストリームを追加
       if (this.localStream) {
-        pc.addStream(this.localStream);
+        const stream = this.localStream;
+        stream.getTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
       }
 
       // オファーを作成
@@ -217,7 +236,10 @@ class WebRTCService {
 
       // ローカルストリームを追加
       if (this.localStream) {
-        pc.addStream(this.localStream);
+        const stream = this.localStream;
+        stream.getTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
       }
 
       // リモートオファーを設定
@@ -303,8 +325,8 @@ class WebRTCService {
     return this.currentCall;
   }
 
-  // ローカルストリームを取得
-  getLocalStream(): MediaStream | null {
+  // ローカルストリームを取得（現在のストリーム）
+  getCurrentLocalStream(): MediaStream | null {
     return this.localStream;
   }
 
