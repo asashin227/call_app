@@ -27,15 +27,21 @@ export default function ReceiverStep1() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
 
   const handleQRCodeScanned = (data: string) => {
+    if (!isScanning) return; // 既に読み取り済みの場合は何もしない
+    
+    setIsScanning(false); // スキャンを停止
+    
     try {
-      setShowQRScanner(false);
       const decompressed = decompressFromQRCode(data);
       setOfferInput(JSON.stringify(decompressed));
+      setShowQRScanner(false);
       Alert.alert('✅ QRコード読み取り成功', 'Offerが入力されました');
     } catch (error) {
       console.error('Failed to process QR code:', error);
+      setShowQRScanner(false);
       Alert.alert('エラー', 'QRコードの読み取りに失敗しました');
     }
   };
@@ -126,7 +132,10 @@ export default function ReceiverStep1() {
               
               <TouchableOpacity
                 style={styles.scanButton}
-                onPress={() => setShowQRScanner(true)}
+                onPress={() => {
+                  setIsScanning(true);
+                  setShowQRScanner(true);
+                }}
               >
                 <Ionicons name="qr-code-outline" size={24} color="#fff" />
                 <Text style={styles.scanButtonText}>QRコードをスキャン</Text>
@@ -225,14 +234,20 @@ export default function ReceiverStep1() {
       <Modal
         visible={showQRScanner}
         animationType="slide"
-        onRequestClose={() => setShowQRScanner(false)}
+        onRequestClose={() => {
+          setIsScanning(true);
+          setShowQRScanner(false);
+        }}
       >
         <View style={styles.scannerContainer}>
           <View style={styles.scannerHeader}>
             <Text style={styles.scannerTitle}>QRコードをスキャン</Text>
             <TouchableOpacity
               style={styles.scannerCloseButton}
-              onPress={() => setShowQRScanner(false)}
+              onPress={() => {
+                setIsScanning(true);
+                setShowQRScanner(false);
+              }}
             >
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
