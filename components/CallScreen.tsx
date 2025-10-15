@@ -40,7 +40,7 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
       try {
         // InCallManagerを起動（WebRTC通話用）
         console.log('📞 CallScreen: Starting InCallManager for WebRTC');
-        InCallManager.start({ media: 'audio', auto: true, ringback: '' });
+        InCallManager.start({ media: 'audio', auto: false, ringback: '' });
         
         // デフォルトでスピーカーをオンに設定
         InCallManager.setForceSpeakerphoneOn(isSpeakerEnabled);

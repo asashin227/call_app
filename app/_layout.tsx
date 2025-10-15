@@ -147,7 +147,9 @@ export default function RootLayout() {
 
         RNCallKeep.addEventListener('didChangeAudioRoute', (data) => {
           console.log('🎧 CallKit: Audio route changed -', data);
-          // オーディオルート変更の処理
+          console.log(`- Reason: ${data.reason}, Output: ${data.output}`);
+          // オーディオルート変更はInCallManagerで管理
+          // UIの状態はCallScreen内で管理されるため、ここでは何もしない
         });
 
         // 発信通話の処理
