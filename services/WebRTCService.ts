@@ -2,6 +2,7 @@ import {
   MediaStream,
   RTCPeerConnection,
   RTCSessionDescription,
+  RTCIceCandidate,
   mediaDevices
 } from 'react-native-webrtc';
 
@@ -50,6 +51,7 @@ class WebRTCService {
   private onLocalStreamCallback?: (stream: MediaStream) => void;
   private onRemoteStreamCallback?: (stream: MediaStream) => void;
   private onCallStatusChangeCallback?: (status: CallData['status']) => void;
+  private onIceCandidateCallback?: (candidate: RTCIceCandidate) => void;
   private onErrorCallback?: (error: Error) => void;
 
   constructor() {
@@ -61,11 +63,13 @@ class WebRTCService {
     onLocalStream?: (stream: MediaStream) => void;
     onRemoteStream?: (stream: MediaStream) => void;
     onCallStatusChange?: (status: CallData['status']) => void;
+    onIceCandidate?: (candidate: RTCIceCandidate) => void;
     onError?: (error: Error) => void;
   }) {
     this.onLocalStreamCallback = callbacks.onLocalStream;
     this.onRemoteStreamCallback = callbacks.onRemoteStream;
     this.onCallStatusChangeCallback = callbacks.onCallStatusChange;
+    this.onIceCandidateCallback = callbacks.onIceCandidate;
     this.onErrorCallback = callbacks.onError;
   }
 
@@ -120,7 +124,12 @@ class WebRTCService {
       pc.addEventListener('icecandidate', (event) => {
         if (event.candidate && this.currentCall) {
           console.log('🧊 WebRTCService: ICE candidate generated');
-          // 手動シグナリングの場合、アプリ側（手動シグナリング画面）でICE候補を収集
+          // コールバックでアプリ側に通知（手動シグナリング用）
+          if (this.onIceCandidateCallback) {
+            this.onIceCandidateCallback(event.candidate);
+          }
+        } else if (!event.candidate) {
+          console.log('✅ WebRTCService: ICE gathering completed');
         }
       });
 

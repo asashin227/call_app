@@ -42,22 +42,11 @@ export default function CallerStep1() {
           const offer = pc.localDescription;
           setConnectionInfo(prev => ({ ...prev, offer }));
           
-          // ICE候補の収集を開始
-          pc.onicecandidate = (event: any) => {
-            if (event.candidate) {
-              console.log('🧊 ICE candidate generated');
-              setConnectionInfo(prev => ({
-                ...prev,
-                localIceCandidates: [...prev.localIceCandidates, event.candidate],
-              }));
-            } else {
-              console.log('✅ ICE gathering completed');
-            }
-          };
+          // ICE候補はManualSignalingContextのonIceCandidateコールバックで自動収集される
           
           Alert.alert(
             '✅ Offer生成完了',
-            '下に表示されているOfferをコピーして相手に送信してください。\n\n相手からAnswerが届いたら次のステップに進んでください。'
+            '下に表示されているOfferをコピーして相手に送信してください。\n\nICE候補も自動的に収集されています。\n\n相手からAnswerが届いたら次のステップに進んでください。'
           );
         }
         setIsGenerating(false);

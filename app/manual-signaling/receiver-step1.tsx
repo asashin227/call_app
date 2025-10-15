@@ -78,20 +78,11 @@ export default function ReceiverStep1() {
           const answer = pc.localDescription;
           setConnectionInfo(prev => ({ ...prev, answer }));
           
-          // ICE候補の収集を開始
-          pc.onicecandidate = (event: any) => {
-            if (event.candidate) {
-              console.log('🧊 ICE candidate generated');
-              setConnectionInfo(prev => ({
-                ...prev,
-                localIceCandidates: [...prev.localIceCandidates, event.candidate],
-              }));
-            }
-          };
+          // ICE候補はManualSignalingContextのonIceCandidateコールバックで自動収集される
           
           Alert.alert(
             '✅ Answer生成完了',
-            '下に表示されているAnswerをコピーして相手に送信してください。',
+            '下に表示されているAnswerをコピーして相手に送信してください。\n\nICE候補も自動的に収集されています。'
           );
         }
         setIsProcessing(false);
