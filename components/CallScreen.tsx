@@ -1,17 +1,19 @@
-import { signalingService } from '@/services/SignalingService';
 import { CallData, webRTCService } from '@/services/WebRTCService';
+import { generateUUID } from '@/utils/uuid';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import RNCallKeep from 'react-native-callkeep';
+import InCallManager from 'react-native-incall-manager';
 import { RTCView } from 'react-native-webrtc';
 
 const { width, height } = Dimensions.get('window');
@@ -27,9 +29,69 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
   const [callStatus, setCallStatus] = useState<CallData['status']>(callData.status);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(callData.hasVideo);
-  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
+  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
+  const [callKeepUUID, setCallKeepUUID] = useState<string | null>(null);
+
+  // CallKeep統合とInCallManager初期化
+  useEffect(() => {
+    const setupCallKeep = async () => {
+      try {
+        // InCallManagerを起動（WebRTC通話用）
+        console.log('📞 CallScreen: Starting InCallManager for WebRTC');
+        InCallManager.start({ media: 'audio', auto: false, ringback: '' });
+        
+        // デフォルトでイヤピースに設定（スピーカーオフ）
+        InCallManager.setForceSpeakerphoneOn(isSpeakerEnabled);
+        
+        // WebRTCServiceからCallKeep UUIDを取得
+        const uuid = webRTCService.getCallKeepUUID();
+        
+        if (uuid) {
+          console.log('📞 CallScreen: Using existing CallKeep UUID:', uuid);
+          setCallKeepUUID(uuid);
+          
+          // CallKeepの通話をアクティブに設定
+          RNCallKeep.setCurrentCallActive(uuid);
+        } else {
+          // UUIDがない場合は新しく生成（フォールバック）
+          const newUuid = generateUUID();
+          console.log('📞 CallScreen: Creating new CallKeep UUID:', newUuid);
+          setCallKeepUUID(newUuid);
+          webRTCService.setCallKeepUUID(newUuid);
+          
+          // CallKeepで通話を開始
+          RNCallKeep.startCall(newUuid, callData.targetUser, callData.targetUser, 'generic', callData.hasVideo);
+          RNCallKeep.setCurrentCallActive(newUuid);
+        }
+      } catch (error) {
+        console.error('❌ CallScreen: Failed to setup CallKeep:', error);
+      }
+    };
+
+    setupCallKeep();
+
+    // クリーンアップ: 通話画面を閉じる際にCallKeepとInCallManagerを終了
+    return () => {
+      if (callKeepUUID) {
+        console.log('📞 CallScreen: Ending CallKeep call:', callKeepUUID);
+        try {
+          RNCallKeep.endCall(callKeepUUID);
+        } catch (error) {
+          console.error('❌ CallScreen: Failed to end CallKeep call:', error);
+        }
+      }
+      
+      // InCallManagerを停止
+      console.log('📞 CallScreen: Stopping InCallManager');
+      try {
+        InCallManager.stop();
+      } catch (error) {
+        console.error('❌ CallScreen: Failed to stop InCallManager:', error);
+      }
+    };
+  }, []);
 
   // 通話時間のカウンター
   useEffect(() => {
@@ -109,7 +171,16 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
   const toggleAudio = useCallback(() => {
     const newMutedState = webRTCService.toggleAudio();
     setIsAudioMuted(!newMutedState);
-  }, []);
+    
+    // CallKeepにもミュート状態を反映
+    if (callKeepUUID) {
+      try {
+        RNCallKeep.setMutedCall(callKeepUUID, !newMutedState);
+      } catch (error) {
+        console.error('❌ CallScreen: Failed to set mute state in CallKeep:', error);
+      }
+    }
+  }, [callKeepUUID]);
 
   // ビデオオン/オフ切り替え
   const toggleVideo = useCallback(() => {
@@ -128,21 +199,40 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
 
   // スピーカー切り替え（イヤピース/スピーカー）
   const toggleSpeaker = useCallback(() => {
-    // TODO: スピーカー切り替えの実装
-    setIsSpeakerEnabled(!isSpeakerEnabled);
-    console.log('🔊 CallScreen: Speaker toggled:', !isSpeakerEnabled);
+    const newSpeakerState = !isSpeakerEnabled;
+    setIsSpeakerEnabled(newSpeakerState);
+    
+    try {
+      // InCallManagerを使用してスピーカーを切り替え
+      InCallManager.setForceSpeakerphoneOn(newSpeakerState);
+      console.log('🔊 CallScreen: Speaker toggled:', newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)');
+    } catch (error) {
+      console.error('❌ CallScreen: Failed to toggle speaker:', error);
+    }
   }, [isSpeakerEnabled]);
 
   // 通話終了
   const handleEndCall = useCallback(async () => {
     try {
-      await signalingService.endCall(callData.id);
+      // CallKeepの通話を終了
+      if (callKeepUUID) {
+        console.log('📞 CallScreen: Ending CallKeep call from button:', callKeepUUID);
+        try {
+          RNCallKeep.endCall(callKeepUUID);
+        } catch (error) {
+          console.error('❌ CallScreen: Failed to end CallKeep call:', error);
+        }
+      }
+      
+      // WebRTCの通話を終了
+      await webRTCService.endCall();
+      
       onEndCall();
     } catch (error) {
       console.error('📱 CallScreen: Failed to end call:', error);
       onEndCall(); // エラーでも画面を閉じる
     }
-  }, [callData.id, onEndCall]);
+  }, [callKeepUUID, onEndCall]);
 
   // 通話状態に応じたメッセージ
   const getStatusMessage = () => {

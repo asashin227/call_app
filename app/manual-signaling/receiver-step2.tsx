@@ -1,9 +1,9 @@
-import CallScreen from '@/components/CallScreen';
 import { useManualSignaling } from '@/contexts/ManualSignalingContext';
+import { webRTCService } from '@/services/WebRTCService';
+import { generateUUID } from '@/utils/uuid';
 import { Ionicons } from '@expo/vector-icons';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -16,6 +16,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import RNCallKeep from 'react-native-callkeep';
 
 export default function ReceiverStep2() {
   const {
@@ -23,30 +24,48 @@ export default function ReceiverStep2() {
     setConnectionInfo,
     iceCandidateInput,
     setIceCandidateInput,
-    currentCall,
+    setCallKeepUUID,
   } = useManualSignaling();
-  const [isConnected, setIsConnected] = useState(false);
+  const [hasShownAlert, setHasShownAlert] = useState(false);
 
-  // 通話接続状態を監視
-  useFocusEffect(
-    useCallback(() => {
-      const pc = (require('@/services/WebRTCService').webRTCService as any).peerConnection;
-      if (pc) {
-        const checkConnection = () => {
-          if (pc.connectionState === 'connected') {
-            setIsConnected(true);
-            router.push('/manual-signaling/call');
-          }
-        };
+  // 接続確立時のコールバックを設定
+  useEffect(() => {
+    const handleConnectionEstablished = () => {
+      if (!hasShownAlert) {
+        setHasShownAlert(true);
         
-        pc.addEventListener('connectionstatechange', checkConnection);
+        // 標準的なUUID形式のCallKeep UUIDを生成
+        const uuid = generateUUID();
+        console.log('📞 Generated CallKeep UUID:', uuid);
+        setCallKeepUUID(uuid);
+        webRTCService.setCallKeepUUID(uuid);
         
-        return () => {
-          pc.removeEventListener('connectionstatechange', checkConnection);
-        };
+        // CallKeepで通話を開始（着信側として）
+        RNCallKeep.startCall(uuid, 'Manual Peer', 'Manual Peer', 'generic', false);
+        
+        // 通話が接続されたことを通知（グローバルモーダルが自動で表示される）
+        console.log('🎉 Connection established! Call screen will be displayed automatically.');
+        
+        // 非ブロッキングアラートを表示
+        setTimeout(() => {
+          Alert.alert(
+            '通話開始',
+            '通話が接続されました',
+            [{ text: 'OK' }],
+            { cancelable: true }
+          );
+        }, 500);
       }
-    }, [])
-  );
+    };
+
+    webRTCService.setEventListeners({
+      onConnectionEstablished: handleConnectionEstablished,
+    });
+
+    return () => {
+      // クリーンアップ
+    };
+  }, [hasShownAlert, setCallKeepUUID]);
 
   const addIceCandidate = async () => {
     try {
@@ -83,18 +102,6 @@ export default function ReceiverStep2() {
     Clipboard.setString(text);
     Alert.alert('コピー完了', `${label}をクリップボードにコピーしました`);
   };
-
-  // 通話中の場合はCallScreenを表示
-  if (isConnected && currentCall) {
-    return (
-      <CallScreen
-        callData={currentCall}
-        onEndCall={() => {
-          router.replace('/manual-signaling');
-        }}
-      />
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>

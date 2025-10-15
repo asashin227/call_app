@@ -1,12 +1,15 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Modal } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
 import 'react-native-reanimated';
 
+import CallScreen from '@/components/CallScreen';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { audioService } from '@/services/AudioService';
+import { CallData, webRTCService } from '@/services/WebRTCService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -14,6 +17,71 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [showCallScreen, setShowCallScreen] = useState(false);
+  const [activeCallData, setActiveCallData] = useState<CallData | null>(null);
+
+  // WebRTCの通話状態を監視してCallScreenを表示
+  useEffect(() => {
+    // 通話状態変更のリスナーを追加
+    let statusChangeListener: ((status: string) => void) | null = null;
+    
+    statusChangeListener = (status: string) => {
+      console.log('🔄 RootLayout: Call status changed to:', status);
+      
+      if (status === 'connected') {
+        // 通話が確立したらCallScreenを表示
+        // WebRTCServiceから現在の通話データを取得
+        const currentCallData = webRTCService.getCurrentCall();
+        if (currentCallData) {
+          setActiveCallData(currentCallData);
+          setShowCallScreen(true);
+        } else {
+          // フォールバック: CallDataを構築
+          const callData: CallData = {
+            id: webRTCService.getCallKeepUUID() || 'unknown',
+            targetUser: 'Manual Peer',
+            type: 'outgoing',
+            status: 'connected',
+            hasVideo: false,
+          };
+          setActiveCallData(callData);
+          setShowCallScreen(true);
+        }
+      } else if (status === 'ended' || status === 'failed') {
+        // 通話が終了したらCallScreenを非表示
+        setShowCallScreen(false);
+        setActiveCallData(null);
+      }
+    };
+
+    // 定期的にWebRTCServiceの通話状態をチェック
+    const checkInterval = setInterval(() => {
+      const currentCallData = webRTCService.getCurrentCall();
+      if (currentCallData && currentCallData.status === 'connected' && !showCallScreen) {
+        console.log('🔄 RootLayout: Detected connected call via polling');
+        setActiveCallData(currentCallData);
+        setShowCallScreen(true);
+      } else if (!currentCallData && showCallScreen) {
+        console.log('🔄 RootLayout: Call ended detected via polling');
+        setShowCallScreen(false);
+        setActiveCallData(null);
+      }
+    }, 1000); // 1秒ごとにチェック
+
+    return () => {
+      // クリーンアップ
+      clearInterval(checkInterval);
+      statusChangeListener = null;
+    };
+  }, [showCallScreen]);
+
+  // CallScreenを閉じる処理
+  const handleEndCall = () => {
+    setShowCallScreen(false);
+    setActiveCallData(null);
+    // WebRTCServiceをクリーンアップ（ManualSignalingContextのresetと同等）
+    webRTCService.endCall();
+  };
 
   // CallKitの初期設定をアプリ起動時に実行
   useEffect(() => {
@@ -66,10 +134,18 @@ export default function RootLayout() {
             console.error('❌ CallKit: Failed to play connected audio:', audioError);
           }
           
-          // 通話応答処理 - 実際のアプリでは通話開始処理を実装
+          // 通話応答処理
           try {
             if (data.callUUID) {
+              // CallKeepの通話をアクティブに設定
               RNCallKeep.setCurrentCallActive(data.callUUID);
+              
+              // WebRTCServiceのCallKeep UUIDと一致するか確認
+              const currentUUID = webRTCService.getCallKeepUUID();
+              if (currentUUID === data.callUUID) {
+                console.log('✅ CallKit: CallKeep answer event matched with current call');
+                // 必要に応じて追加の処理を実行
+              }
             } else {
               console.warn('⚠️ CallKit: No callUUID in answerCall');
             }
@@ -92,6 +168,15 @@ export default function RootLayout() {
           // 通話終了処理
           try {
             if (data.callUUID) {
+              // WebRTCServiceのCallKeep UUIDと一致するか確認
+              const currentUUID = webRTCService.getCallKeepUUID();
+              if (currentUUID === data.callUUID) {
+                console.log('✅ CallKit: Ending WebRTC call that matches CallKeep UUID');
+                // WebRTCの通話を終了
+                await webRTCService.endCall();
+              }
+              
+              // CallKeepの通話を終了
               RNCallKeep.endCall(data.callUUID);
             } else {
               console.warn('⚠️ CallKit: No callUUID in endCall');
@@ -129,7 +214,9 @@ export default function RootLayout() {
 
         RNCallKeep.addEventListener('didChangeAudioRoute', (data) => {
           console.log('🎧 CallKit: Audio route changed -', data);
-          // オーディオルート変更の処理
+          console.log(`- Reason: ${data.reason}, Output: ${data.output}`);
+          // オーディオルート変更はInCallManagerで管理
+          // UIの状態はCallScreen内で管理されるため、ここでは何もしない
         });
 
         // 発信通話の処理
@@ -168,6 +255,29 @@ export default function RootLayout() {
 
         RNCallKeep.addEventListener('didPerformSetMutedCallAction', (data) => {
           console.log('🔇 CallKit: Set muted -', data);
+          
+          // WebRTCServiceのミュート状態を更新
+          try {
+            if (data.callUUID) {
+              const currentUUID = webRTCService.getCallKeepUUID();
+              if (currentUUID === data.callUUID) {
+                console.log(`🔇 CallKit: Updating WebRTC mute state to: ${data.muted}`);
+                
+                // 現在のミュート状態を取得して必要に応じて切り替え
+                const localStream = webRTCService.getCurrentLocalStream();
+                if (localStream) {
+                  const audioTrack = localStream.getAudioTracks()[0];
+                  if (audioTrack) {
+                    // data.mutedがtrueならミュート、falseならミュート解除
+                    audioTrack.enabled = !data.muted;
+                    console.log(`✅ CallKit: Audio track enabled set to: ${audioTrack.enabled}`);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('❌ CallKit: Failed to update mute state:', error);
+          }
         });
 
       } catch (error) {
@@ -205,6 +315,21 @@ export default function RootLayout() {
         <Stack.Screen name="manual-signaling" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
+      
+      {/* グローバル通話画面モーダル */}
+      <Modal
+        visible={showCallScreen && activeCallData !== null}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleEndCall}
+      >
+        {activeCallData && (
+          <CallScreen
+            callData={activeCallData}
+            onEndCall={handleEndCall}
+          />
+        )}
+      </Modal>
     </ThemeProvider>
   );
 }

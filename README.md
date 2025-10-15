@@ -23,8 +23,9 @@ A React Native/Expo application demonstrating **iOS CallKit** integration with a
 ### 🌐 WebRTC Features / WebRTC機能
 - **P2P Audio/Video Calls / P2P音声・映像通話**: Real-time peer-to-peer communication
 - **Manual Signaling / 手動シグナリング**: Test WebRTC without a signaling server
-- **Automatic Signaling / 自動シグナリング**: Production-ready signaling (in development)
+- **Global Call Screen / グローバル通話画面**: Call screen automatically appears on any screen
 - **ICE Candidate Exchange / ICE候補交換**: Automatic network negotiation
+- **CallKit Integration / CallKit統合**: Native iOS call experience during WebRTC calls
 
 ## 🛠️ Tech Stack / 技術スタック
 
@@ -146,7 +147,7 @@ npx expo build:ios --type app-store
   - Visual feedback during delay
 
 ### 🔧 Manual Signaling Screen / 手動シグナリング画面
-**Path**: `components/ManualSignalingScreen.tsx`
+**Path**: `app/manual-signaling/`
 - **Mode Selection / モード選択**: Caller or Receiver
 - **SDP Exchange / SDP交換**: Offer and Answer exchange
 - **ICE Candidate Exchange / ICE候補交換**: Network connectivity information
@@ -155,6 +156,19 @@ npx expo build:ios --type app-store
   - Copy & paste connection info
   - Real-time connection status
   - Step-by-step guidance
+  - Automatic call screen display when connected
+
+### 📞 Call Screen / 通話画面
+**Global Modal** - Appears automatically during active calls
+- **Audio Controls / 音声制御**: Mute, speaker toggle (default: earpiece)
+- **Video Controls / ビデオ制御**: Camera on/off, switch camera
+- **Call Information / 通話情報**: Duration, connection status
+- **CallKit Integration / CallKit統合**: Native iOS call UI alongside app UI
+- **Features / 機能**:
+  - Displays on any screen when call is active
+  - Synchronized with CallKit call state
+  - InCallManager for audio routing
+  - Real-time call duration counter
 
 📚 **詳細ガイド**: [手動シグナリングガイド](docs/MANUAL_SIGNALING_GUIDE.md)
 
