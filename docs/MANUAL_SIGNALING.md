@@ -435,43 +435,8 @@ ICE候補は数秒ごとに生成される
 
 ```
 同じ部屋にいる
-→ ✅ 口頭でコードを読み上げられる（QRコード活用）
+→ ✅ AirDropやBluetoothで情報を共有できる
 ```
-
----
-
-## 🚀 改善案: QRコードで交換
-
-### より実用的な方法
-
-```typescript
-import QRCode from 'react-native-qrcode-svg';
-import { RNCamera } from 'react-native-camera';
-
-// Offerを生成してQRコード表示
-const generateOfferQR = async () => {
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  
-  const offerData = JSON.stringify(offer);
-  
-  return (
-    <QRCode
-      value={offerData}
-      size={300}
-    />
-  );
-};
-
-// QRコードをスキャンしてOfferを受信
-const scanOfferQR = async (qrData: string) => {
-  const offer = JSON.parse(qrData);
-  await peerConnection.setRemoteDescription(offer);
-  // Answerを生成...
-};
-```
-
-**これで手間が激減！**
 
 ---
 

@@ -129,8 +129,8 @@ npx expo build:ios --type app-store
   - Video Call Toggle / ビデオ通話切り替え
 - **Features / 機能**:
   - Account-based calling (generic handle type)
-  - WebRTC P2P calling
-  - Microphone and camera permission handling
+  - WebRTC P2P calling (audio-only)
+  - Microphone permission handling
   - Audio session management
   - Debug information display
 
