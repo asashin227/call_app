@@ -20,14 +20,22 @@ A React Native/Expo application demonstrating **iOS CallKit** integration with a
 - **Volume Control / 音量制御**: Different volume levels for each tone type
 - **Background Audio / バックグラウンド音声**: Continues playing during CallKit sessions
 
+### 🌐 WebRTC Features / WebRTC機能
+- **P2P Audio/Video Calls / P2P音声・映像通話**: Real-time peer-to-peer communication
+- **Manual Signaling / 手動シグナリング**: Test WebRTC without a signaling server
+- **Global Call Screen / グローバル通話画面**: Call screen automatically appears on any screen
+- **ICE Candidate Exchange / ICE候補交換**: Automatic network negotiation
+- **CallKit Integration / CallKit統合**: Native iOS call experience during WebRTC calls
+
 ## 🛠️ Tech Stack / 技術スタック
 
 - **Framework**: Expo SDK with React Native
 - **CallKit**: react-native-callkeep for iOS native calling
+- **WebRTC**: react-native-webrtc for P2P communication
 - **Audio**: expo-av for audio session management
 - **Routing**: Expo Router with file-based navigation
 - **TypeScript**: Full TypeScript implementation
-- **Platform**: iOS focus (CallKit is iOS-specific)
+- **Platform**: iOS focus (CallKit is iOS-specific, WebRTC is cross-platform)
 
 ## 📋 Requirements / 動作環境
 
@@ -116,9 +124,13 @@ npx expo build:ios --type app-store
 ### 🔺 Outgoing Call Screen / 発信画面
 **Path**: `app/(tabs)/index.tsx`
 - **Input Field / 入力欄**: Account name or username input
-- **Call Button / 通話ボタン**: Triggers CallKit outgoing call
+- **Call Button / 通話ボタン**: Triggers CallKit or WebRTC call
+- **WebRTC Settings / WebRTC設定**:
+  - Manual Signaling Mode / 手動シグナリングモード
+  - Video Call Toggle / ビデオ通話切り替え
 - **Features / 機能**:
   - Account-based calling (generic handle type)
+  - WebRTC P2P calling (audio-only)
   - Microphone permission handling
   - Audio session management
   - Debug information display
@@ -133,6 +145,32 @@ npx expo build:ios --type app-store
   - Cancelable incoming call simulation
   - CallKit incoming call integration
   - Visual feedback during delay
+
+### 🔧 Manual Signaling Screen / 手動シグナリング画面
+**Path**: `app/manual-signaling/`
+- **Mode Selection / モード選択**: Caller or Receiver
+- **SDP Exchange / SDP交換**: Offer and Answer exchange
+- **ICE Candidate Exchange / ICE候補交換**: Network connectivity information
+- **Features / 機能**:
+  - No signaling server required
+  - Copy & paste connection info
+  - Real-time connection status
+  - Step-by-step guidance
+  - Automatic call screen display when connected
+
+### 📞 Call Screen / 通話画面
+**Global Modal** - Appears automatically during active calls
+- **Audio Controls / 音声制御**: Mute, speaker toggle (default: earpiece)
+- **Video Controls / ビデオ制御**: Camera on/off, switch camera
+- **Call Information / 通話情報**: Duration, connection status
+- **CallKit Integration / CallKit統合**: Native iOS call UI alongside app UI
+- **Features / 機能**:
+  - Displays on any screen when call is active
+  - Synchronized with CallKit call state
+  - InCallManager for audio routing
+  - Real-time call duration counter
+
+📚 **詳細ガイド**: [手動シグナリングガイド](docs/MANUAL_SIGNALING_GUIDE.md)
 
 ## 📞 CallKit Implementation / CallKit実装詳細
 
@@ -244,12 +282,57 @@ npx expo run:ios --device --clear-cache
 # Enable Debug → Console in Xcode for detailed logs
 ```
 
+## 🔧 Manual Signaling / 手動シグナリング機能
+
+手動シグナリング機能を使用すると、**シグナリングサーバーなし**でWebRTC通話をテストできます。
+
+### 使い方 / How to Use
+
+1. **有効化** / Enable
+   - メイン画面で「手動シグナリング（サーバー不要）」をON
+
+2. **通話開始** / Start Call
+   - 「通話」ボタンをタップ
+   - 発信側（Caller）または受信側（Receiver）を選択
+
+3. **情報交換** / Exchange Information
+   - **発信側**: Offerを生成 → コピー → 受信側に送信
+   - **受信側**: Offerを入力 → Answerを生成 → 発信側に送信
+   - **両方**: ICE候補を順次交換
+
+4. **通話確立** / Call Established
+   - すべての情報が交換されると自動的に接続
+
+### 必要な情報 / Required Information
+
+| 情報 | 方向 | サイズ | 説明 |
+|-----|------|--------|------|
+| **SDP Offer** | 発信側→受信側 | 2,000〜4,000文字 | メディア情報と接続提案 |
+| **SDP Answer** | 受信側→発信側 | 2,000〜4,000文字 | 接続応答 |
+| **ICE候補** | 両方向 | 各200〜500文字 × 3〜10個 | ネットワーク接続情報 |
+
+### 詳細ドキュメント / Detailed Documentation
+
+- 📖 [手動シグナリングガイド](docs/MANUAL_SIGNALING_GUIDE.md) - 詳細な使い方
+- 📋 [必要な情報一覧](docs/REQUIRED_INFORMATION.md) - 交換する情報の詳細
+- 🔍 [通話相手の識別方法](docs/CALLER_IDENTIFICATION.md) - 識別の仕組み
+- 📊 [通話可能状況](docs/CALL_CAPABILITY_STATUS.md) - 実装状況と制限
+- 🌐 [シグナリングサーバー解説](docs/SIGNALING_SERVER_EXPLAINED.md) - シグナリングとは
+
 ## 📚 References / 参考資料
 
+### CallKit
 - [CallKit Documentation](https://developer.apple.com/documentation/callkit)
 - [react-native-callkeep](https://github.com/react-native-webrtc/react-native-callkeep)
+
+### WebRTC
+- [WebRTC Documentation](https://webrtc.org/getting-started/overview)
+- [react-native-webrtc](https://github.com/react-native-webrtc/react-native-webrtc)
+
+### Expo
 - [expo-av Documentation](https://docs.expo.dev/versions/latest/sdk/audio/)
 - [Expo Router](https://docs.expo.dev/router/introduction/)
+- [Expo Development Builds](https://docs.expo.dev/develop/development-builds/introduction/)
 
 ## 📄 License / ライセンス
 

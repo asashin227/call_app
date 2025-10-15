@@ -7,14 +7,15 @@
     "icon": "./assets/images/icon.png",
     "scheme": "callapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dev.asashin227.call-app",
       "appleTeamId": "RJ5X8394TP",
       "buildNumber": "1",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "このアプリは通話機能にマイクを使用します。CallKitによる通話にはマイクのアクセス権が必要です。",
+        "NSMicrophoneUsageDescription": "このアプリは通話機能にマイクを使用します。CallKitやWebRTC通話にはマイクのアクセス権が必要です。",
+        "NSCameraUsageDescription": "QRコードをスキャンしてWebRTC接続情報を読み取るためにカメラを使用します。",
         "UIBackgroundModes": ["voip"],
         "CFBundleDisplayName": "Call App",
         "ITSAppUsesNonExemptEncryption": false
@@ -29,7 +30,13 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "dev.asashin227.callapp"
+      "package": "dev.asashin227.callapp",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
       "output": "static",
@@ -38,6 +45,13 @@
     "plugins": [
       "expo-router",
       "expo-av",
+      "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "QRコードをスキャンしてWebRTC接続情報を読み取るためにカメラを使用します。"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -52,8 +66,7 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }
