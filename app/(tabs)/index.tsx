@@ -1,4 +1,3 @@
-import ManualSignalingScreen from '@/components/ManualSignalingScreen';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import WebRTCCallModal from '@/components/WebRTCCallModal';
@@ -6,7 +5,7 @@ import { audioService } from '@/services/AudioService';
 import { signalingService } from '@/services/SignalingService';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Switch, TextInput } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
@@ -146,9 +145,9 @@ export default function HomeScreen() {
 
     try {
       if (manualSignaling) {
-        // 手動シグナリングモードを開く
+        // 手動シグナリング画面に遷移
         console.log('🔧 Opening manual signaling mode...');
-        setShowWebRTCModal(true);
+        router.push('/manual-signaling');
         return;
       }
       
@@ -494,9 +493,7 @@ export default function HomeScreen() {
       </ThemedView>
       
       {/* WebRTC通話モーダル */}
-      {manualSignaling && showWebRTCModal ? (
-        <ManualSignalingScreen onClose={() => setShowWebRTCModal(false)} />
-      ) : (
+      {!manualSignaling && (
         <WebRTCCallModal
           visible={showWebRTCModal}
           onClose={() => setShowWebRTCModal(false)}
