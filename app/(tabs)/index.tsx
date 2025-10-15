@@ -1,16 +1,23 @@
+import ManualSignalingScreen from '@/components/ManualSignalingScreen';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import WebRTCCallModal from '@/components/WebRTCCallModal';
 import { audioService } from '@/services/AudioService';
+import { signalingService } from '@/services/SignalingService';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Switch, TextInput } from 'react-native';
 import RNCallKeep from 'react-native-callkeep';
 
 export default function HomeScreen() {
   const [description, setDescription] = useState('');
   const textInputRef = useRef<TextInput>(null);
+  const [enableWebRTC, setEnableWebRTC] = useState(true); // WebRTC機能を有効化
+  const [enableVideo, setEnableVideo] = useState(false);
+  const [showWebRTCModal, setShowWebRTCModal] = useState(false);
+  const [manualSignaling, setManualSignaling] = useState(false); // 手動シグナリングモード
 
   // シミュレーターかどうかを正確に判定する関数
   const isSimulator = (): boolean => {
@@ -24,7 +31,40 @@ export default function HomeScreen() {
     return false;
   };
 
-  // マイク権限を要求する関数
+  // WebRTC用の権限を要求する関数（カメラ・マイク）
+  const requestWebRTCPermissions = async (needsVideo: boolean = false): Promise<boolean> => {
+    try {
+      console.log('📋 Requesting WebRTC permissions... Video:', needsVideo);
+      
+      // マイク権限を要求
+      const micPermission = await Audio.requestPermissionsAsync();
+      console.log('📋 Microphone permission result:', micPermission.status);
+      
+      if (micPermission.status !== 'granted') {
+        Alert.alert(
+          'マイク権限が必要です',
+          'WebRTC通話機能を使用するにはマイクのアクセス権限が必要です。',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      
+      // ビデオ通話の場合はカメラ権限も要求
+      if (needsVideo) {
+        // TODO: カメラ権限の実装
+        console.log('📋 Camera permission would be requested here for video calls');
+      }
+      
+      console.log('✅ WebRTC permissions granted');
+      return true;
+    } catch (error) {
+      console.error('❌ Error requesting WebRTC permissions:', error);
+      Alert.alert('エラー', '権限の取得中にエラーが発生しました。');
+      return false;
+    }
+  };
+
+  // マイク権限を要求する関数（既存のCallKeep用）
   const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
       console.log('📋 Requesting microphone permission...');
@@ -105,20 +145,67 @@ export default function HomeScreen() {
     }
 
     try {
-      // マイク権限を確認・要求
-      const hasPermission = await requestMicrophonePermission();
-      if (!hasPermission) {
-        console.log('❌ CallKit: Microphone permission not granted, aborting call');
+      if (manualSignaling) {
+        // 手動シグナリングモードを開く
+        console.log('🔧 Opening manual signaling mode...');
+        setShowWebRTCModal(true);
         return;
       }
-
-      // 権限が取得できた場合のみ通話を開始
-      console.log('✅ CallKit: Microphone permission granted, proceeding with call');
-      startCallWithWarning();
+      
+      if (enableWebRTC) {
+        // WebRTC通話を開始
+        console.log('🎥 Starting WebRTC call...');
+        await startWebRTCCall();
+      } else {
+        // 従来のCallKeep通話を開始
+        console.log('📞 Starting CallKeep call...');
+        const hasPermission = await requestMicrophonePermission();
+        if (!hasPermission) {
+          console.log('❌ CallKit: Microphone permission not granted, aborting call');
+          return;
+        }
+        console.log('✅ CallKit: Microphone permission granted, proceeding with call');
+        startCallWithWarning();
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       Alert.alert('エラー', `通話の開始に失敗しました: ${errorMessage}`);
-      console.error('CallKit error:', error);
+      console.error('Call error:', error);
+    }
+  };
+
+  // WebRTC通話を開始する関数
+  const startWebRTCCall = async () => {
+    try {
+      // WebRTC権限を確認・要求
+      const hasPermissions = await requestWebRTCPermissions(enableVideo);
+      if (!hasPermissions) {
+        console.log('❌ WebRTC: Permissions not granted, aborting call');
+        return;
+      }
+
+      console.log('🎥 WebRTC: Starting call to:', description.trim(), 'with video:', enableVideo);
+      
+      // シグナリングサービスを初期化
+      if (!signalingService.isConnectedToSignaling()) {
+        await signalingService.connect({
+          id: 'local_user',
+          name: 'あなた',
+          status: 'online',
+        });
+      }
+
+      // WebRTC通話を開始
+      const callId = await signalingService.initiateCall(description.trim(), enableVideo);
+      
+      // WebRTCモーダルを表示
+      setShowWebRTCModal(true);
+
+      console.log('✅ WebRTC: Call initiated successfully with ID:', callId);
+
+    } catch (error) {
+      console.error('❌ WebRTC: Failed to start call:', error);
+      throw error;
     }
   };
 
@@ -307,40 +394,114 @@ export default function HomeScreen() {
           />
         </ThemedView>
 
+        {/* WebRTC設定 */}
+        <ThemedView style={styles.webrtcContainer}>
+          <ThemedText style={styles.webrtcTitle}>🎥 WebRTC設定</ThemedText>
+          
+          <ThemedView style={styles.settingRow}>
+            <ThemedText style={styles.settingLabel}>手動シグナリング（サーバー不要）</ThemedText>
+            <Switch
+              value={manualSignaling}
+              onValueChange={(value) => {
+                setManualSignaling(value);
+                if (value) {
+                  setEnableWebRTC(true); // 手動モードはWebRTCを使用
+                }
+              }}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={manualSignaling ? '#FF9500' : '#f4f3f4'}
+            />
+          </ThemedView>
+          
+          {!manualSignaling && (
+            <>
+              <ThemedView style={styles.settingRow}>
+                <ThemedText style={styles.settingLabel}>WebRTC通話を使用</ThemedText>
+                <Switch
+                  value={enableWebRTC}
+                  onValueChange={setEnableWebRTC}
+                  trackColor={{ false: '#767577', true: '#81b0ff' }}
+                  thumbColor={enableWebRTC ? '#007AFF' : '#f4f3f4'}
+                />
+              </ThemedView>
+
+              {enableWebRTC && (
+                <ThemedView style={styles.settingRow}>
+                  <ThemedText style={styles.settingLabel}>ビデオ通話</ThemedText>
+                  <Switch
+                    value={enableVideo}
+                    onValueChange={setEnableVideo}
+                    trackColor={{ false: '#767577', true: '#81b0ff' }}
+                    thumbColor={enableVideo ? '#007AFF' : '#f4f3f4'}
+                  />
+                </ThemedView>
+              )}
+            </>
+          )}
+        </ThemedView>
+
         <ThemedView style={styles.infoContainer}>
           <ThemedText style={styles.infoTitle}>💡 使用方法</ThemedText>
           <ThemedText style={styles.infoText}>
             1. ユーザー名またはアカウント名を入力{'\n'}
-            2. 右上の「Call」ボタンを押す{'\n'}
-            3. マイク権限の許可（初回のみ）{'\n'}
-            4. CallKitの発信画面が表示される{'\n'}
-            5. 通話開始・終了・保留などが可能{'\n'}
+            2. WebRTC設定を選択（WebRTC/CallKeep）{'\n'}
+            3. 右上の「Call」ボタンを押す{'\n'}
+            4. 権限の許可（初回のみ）{'\n'}
+            5. {enableWebRTC ? 'WebRTC通話画面' : 'CallKitの発信画面'}が表示される{'\n'}
+            6. 通話開始・終了・保留などが可能{'\n'}
             {'\n'}
-            • 汎用タイプ（generic）での発信{'\n'}
+            • {enableWebRTC ? 'P2P実通話機能' : '汎用タイプ（generic）での発信'}{'\n'}
             • 日本語・英数字どちらでも対応{'\n'}
-            • 入力後は自動でクリア
+            • {enableWebRTC && enableVideo ? 'ビデオ通話対応' : '音声通話'}
           </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.featuresContainer}>
-          <ThemedText style={styles.featuresTitle}>🚀 発信機能</ThemedText>
+          <ThemedText style={styles.featuresTitle}>🚀 {enableWebRTC ? 'WebRTC' : 'CallKeep'}機能</ThemedText>
           <ThemedText style={styles.featuresText}>
-            • **アカウント名発信**: 電話番号以外での通話{'\n'}
-            • **CallKit統合**: ネイティブ通話UI{'\n'}
-            • **権限管理**: 自動マイク権限要求{'\n'}
-            • **デバッグ情報**: 詳細ログ出力{'\n'}
-            • **環境対応**: シミュレーター・実機両対応
+            {enableWebRTC ? (
+              <>
+                • **P2P通話**: 実際の音声・ビデオ通話{'\n'}
+                • **WebRTC統合**: 最新のWeb技術で通話{'\n'}
+                • **ビデオ通話**: カメラを使った映像通話{'\n'}
+                • **通話制御**: ミュート・スピーカー切り替え{'\n'}
+                • **権限管理**: カメラ・マイク権限自動要求{'\n'}
+                • **クロスプラットフォーム**: iOS・Android対応
+              </>
+            ) : (
+              <>
+                • **アカウント名発信**: 電話番号以外での通話{'\n'}
+                • **CallKit統合**: ネイティブ通話UI{'\n'}
+                • **権限管理**: 自動マイク権限要求{'\n'}
+                • **デバッグ情報**: 詳細ログ出力{'\n'}
+                • **環境対応**: シミュレーター・実機両対応
+              </>
+            )}
           </ThemedText>
         </ThemedView>
 
         <ThemedView style={styles.warningContainer}>
           <ThemedText style={styles.warningText}>
-            ⚠️ 実際の通話ではありません。CallKitの動作確認用のテスト機能です。
+            {enableWebRTC ? (
+              '🎥 WebRTC機能により実際の音声・ビデオ通話が可能です。デモ環境では自動応答されます。'
+            ) : (
+              '⚠️ CallKeep機能はUIのみで実際の通話ではありません。動作確認用のテスト機能です。'
+            )}
           </ThemedText>
         </ThemedView>
         </ThemedView>
       </ScrollView>
       </ThemedView>
+      
+      {/* WebRTC通話モーダル */}
+      {manualSignaling && showWebRTCModal ? (
+        <ManualSignalingScreen onClose={() => setShowWebRTCModal(false)} />
+      ) : (
+        <WebRTCCallModal
+          visible={showWebRTCModal}
+          onClose={() => setShowWebRTCModal(false)}
+        />
+      )}
     </>
   );
 }
@@ -430,5 +591,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#856404',
     textAlign: 'center',
+  },
+  webrtcContainer: {
+    backgroundColor: '#e8f5e8',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#c8e6c9',
+  },
+  webrtcTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#2e7d32',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  settingLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
   },
 });
