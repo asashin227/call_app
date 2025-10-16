@@ -5,12 +5,18 @@
 export type AudioRoute = 'Receiver' | 'Speaker' | 'Bluetooth' | 'HeadsetInOut' | 'Unknown';
 
 /**
+ * 音声経路変更の発信元
+ */
+export type AudioRouteChangeSource = 'callkit' | 'app-ui';
+
+/**
  * 音声経路変更イベントのデータ
  */
 export interface AudioRouteChangeEvent {
   route: AudioRoute;
   reason: number;
   timestamp: number;
+  source: AudioRouteChangeSource;
 }
 
 /**
@@ -57,6 +63,7 @@ class AudioRouteService {
       route,
       reason,
       timestamp: Date.now(),
+      source: 'callkit',
     };
     
     this.notifyListeners(event);
@@ -78,11 +85,12 @@ class AudioRouteService {
     if (this.currentRoute !== 'Bluetooth' && this.currentRoute !== 'HeadsetInOut') {
       this.currentRoute = speakerEnabled ? 'Speaker' : 'Receiver';
       
-      // リスナーに通知（理由コード4 = Override）
+      // リスナーに通知（理由コード4 = Override、発信元はapp-ui）
       const event: AudioRouteChangeEvent = {
         route: this.currentRoute,
         reason: 4,
         timestamp: Date.now(),
+        source: 'app-ui',
       };
       
       this.notifyListeners(event);

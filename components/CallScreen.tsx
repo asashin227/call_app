@@ -100,25 +100,26 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
     
     const unsubscribe = audioRouteService.addListener((event) => {
       console.log(`🎧 CallScreen: Received audio route change event:`, event);
-      console.log(`- Route: ${event.route}, Reason: ${event.reason}`);
+      console.log(`- Route: ${event.route}, Reason: ${event.reason}, Source: ${event.source}`);
       
       // スピーカー状態を更新
       const newSpeakerState = event.route === 'Speaker';
       
-      // UI状態が現在の状態と異なる場合のみ更新
-      if (isSpeakerEnabled !== newSpeakerState) {
-        console.log(`🎧 CallScreen: Updating speaker state: ${isSpeakerEnabled} → ${newSpeakerState}`);
-        setIsSpeakerEnabled(newSpeakerState);
-        
-        // InCallManagerにも反映（CallKitで既に変更されている場合も同期のため実行）
+      // UI状態を常に更新
+      console.log(`🎧 CallScreen: Updating speaker state: ${newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)'}`);
+      setIsSpeakerEnabled(newSpeakerState);
+      
+      // CallKitからの変更の場合のみInCallManagerに反映
+      // （app-uiからの変更の場合は、toggleSpeaker()で既に設定済み）
+      if (event.source === 'callkit') {
         try {
           InCallManager.setForceSpeakerphoneOn(newSpeakerState);
-          console.log(`🎧 CallScreen: InCallManager updated to match CallKit state`);
+          console.log(`🎧 CallScreen: InCallManager synced to match CallKit state`);
         } catch (error) {
-          console.error('❌ CallScreen: Failed to update InCallManager:', error);
+          console.error('❌ CallScreen: Failed to sync InCallManager:', error);
         }
       } else {
-        console.log(`🎧 CallScreen: Speaker state already in sync (${newSpeakerState})`);
+        console.log(`🎧 CallScreen: Skipping InCallManager update (already set by app UI)`);
       }
     });
     
@@ -126,7 +127,7 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
       console.log('🎧 CallScreen: Removing AudioRouteService listener');
       unsubscribe();
     };
-  }, [isSpeakerEnabled]);
+  }, []); // 依存配列を空にして、リスナーを一度だけ作成
 
   // 通話時間のカウンター
   useEffect(() => {
