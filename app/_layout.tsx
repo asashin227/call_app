@@ -8,8 +8,8 @@ import 'react-native-reanimated';
 
 import CallScreen from '@/components/CallScreen';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AudioRoute, audioRouteService } from '@/services/AudioRouteService';
 import { audioService } from '@/services/AudioService';
-import { audioRouteService, AudioRoute } from '@/services/AudioRouteService';
 import { CallData, webRTCService } from '@/services/WebRTCService';
 
 export const unstable_settings = {

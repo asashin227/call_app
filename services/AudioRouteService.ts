@@ -1,4 +1,3 @@
-import { NativeEventEmitter, NativeModules } from 'react-native';
 
 /**
  * 音声出力経路の種類
