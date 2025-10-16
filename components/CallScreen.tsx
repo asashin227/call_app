@@ -22,9 +22,10 @@ const { width, height } = Dimensions.get('window');
 interface CallScreenProps {
   callData: CallData;
   onEndCall: () => void;
+  onMinimize?: () => void;
 }
 
-export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
+export default function CallScreen({ callData, onEndCall, onMinimize }: CallScreenProps) {
   const [localStream, setLocalStream] = useState<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
   const [callStatus, setCallStatus] = useState<CallData['status']>(callData.status);
@@ -301,8 +302,18 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
       
       {/* ヘッダー部分 */}
       <View style={styles.header}>
-        <Text style={styles.contactName}>{callData.targetUser}</Text>
-        <Text style={styles.callStatus}>{getStatusMessage()}</Text>
+        {onMinimize && (
+          <TouchableOpacity
+            style={styles.minimizeButton}
+            onPress={onMinimize}
+          >
+            <Ionicons name="chevron-down" size={28} color="#fff" />
+          </TouchableOpacity>
+        )}
+        <View style={styles.headerContent}>
+          <Text style={styles.contactName}>{callData.targetUser}</Text>
+          <Text style={styles.callStatus}>{getStatusMessage()}</Text>
+        </View>
       </View>
 
       {/* ビデオ表示エリア */}
@@ -418,6 +429,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
     zIndex: 2,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  minimizeButton: {
+    position: 'absolute',
+    left: 20,
+    top: 20,
+    padding: 8,
+    zIndex: 3,
+  },
+  headerContent: {
+    alignItems: 'center',
+    flex: 1,
   },
   contactName: {
     fontSize: 24,
