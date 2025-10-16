@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import CallScreen from '@/components/CallScreen';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { audioService } from '@/services/AudioService';
+import { audioRouteService, AudioRoute } from '@/services/AudioRouteService';
 import { CallData, webRTCService } from '@/services/WebRTCService';
 
 export const unstable_settings = {
@@ -215,8 +216,10 @@ export default function RootLayout() {
         RNCallKeep.addEventListener('didChangeAudioRoute', (data) => {
           console.log('🎧 CallKit: Audio route changed -', data);
           console.log(`- Reason: ${data.reason}, Output: ${data.output}`);
-          // オーディオルート変更はInCallManagerで管理
-          // UIの状態はCallScreen内で管理されるため、ここでは何もしない
+          
+          // AudioRouteServiceに通知して、アプリUI側と同期
+          const route = (data.output || 'Unknown') as AudioRoute;
+          audioRouteService.handleCallKitRouteChange(route, data.reason || 0);
         });
 
         // 発信通話の処理

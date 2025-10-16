@@ -1,3 +1,4 @@
+import { audioRouteService } from '@/services/AudioRouteService';
 import { CallData, webRTCService } from '@/services/WebRTCService';
 import { generateUUID } from '@/utils/uuid';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,6 +93,40 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
       }
     };
   }, []);
+
+  // AudioRouteServiceのリスナーを設定（CallKitからの音声経路変更を検知）
+  useEffect(() => {
+    console.log('🎧 CallScreen: Setting up AudioRouteService listener');
+    
+    const unsubscribe = audioRouteService.addListener((event) => {
+      console.log(`🎧 CallScreen: Received audio route change event:`, event);
+      console.log(`- Route: ${event.route}, Reason: ${event.reason}`);
+      
+      // スピーカー状態を更新
+      const newSpeakerState = event.route === 'Speaker';
+      
+      // UI状態が現在の状態と異なる場合のみ更新
+      if (isSpeakerEnabled !== newSpeakerState) {
+        console.log(`🎧 CallScreen: Updating speaker state: ${isSpeakerEnabled} → ${newSpeakerState}`);
+        setIsSpeakerEnabled(newSpeakerState);
+        
+        // InCallManagerにも反映（CallKitで既に変更されている場合も同期のため実行）
+        try {
+          InCallManager.setForceSpeakerphoneOn(newSpeakerState);
+          console.log(`🎧 CallScreen: InCallManager updated to match CallKit state`);
+        } catch (error) {
+          console.error('❌ CallScreen: Failed to update InCallManager:', error);
+        }
+      } else {
+        console.log(`🎧 CallScreen: Speaker state already in sync (${newSpeakerState})`);
+      }
+    });
+    
+    return () => {
+      console.log('🎧 CallScreen: Removing AudioRouteService listener');
+      unsubscribe();
+    };
+  }, [isSpeakerEnabled]);
 
   // 通話時間のカウンター
   useEffect(() => {
@@ -200,12 +235,19 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
   // スピーカー切り替え（イヤピース/スピーカー）
   const toggleSpeaker = useCallback(() => {
     const newSpeakerState = !isSpeakerEnabled;
+    
+    console.log(`🔊 CallScreen: App UI toggling speaker: ${isSpeakerEnabled} → ${newSpeakerState}`);
+    
+    // UI状態を更新
     setIsSpeakerEnabled(newSpeakerState);
     
     try {
       // InCallManagerを使用してスピーカーを切り替え
       InCallManager.setForceSpeakerphoneOn(newSpeakerState);
-      console.log('🔊 CallScreen: Speaker toggled:', newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)');
+      console.log('🔊 CallScreen: InCallManager updated:', newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)');
+      
+      // AudioRouteServiceに通知（アプリUI側からの変更）
+      audioRouteService.handleAppUIRouteChange(newSpeakerState);
     } catch (error) {
       console.error('❌ CallScreen: Failed to toggle speaker:', error);
     }
