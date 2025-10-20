@@ -21,6 +21,8 @@ interface ManualSignalingContextType {
   setIceCandidateInput: React.Dispatch<React.SetStateAction<string>>;
   callKeepUUID: string | null;
   setCallKeepUUID: React.Dispatch<React.SetStateAction<string | null>>;
+  showCallScreen: boolean;
+  setShowCallScreen: React.Dispatch<React.SetStateAction<boolean>>;
   reset: () => void;
 }
 
@@ -36,6 +38,7 @@ export function ManualSignalingProvider({ children }: { children: React.ReactNod
   const [answerInput, setAnswerInput] = useState('');
   const [iceCandidateInput, setIceCandidateInput] = useState('');
   const [callKeepUUID, setCallKeepUUID] = useState<string | null>(null);
+  const [showCallScreen, setShowCallScreen] = useState(false);
 
   useEffect(() => {
     webRTCService.setEventListeners({
@@ -73,6 +76,7 @@ export function ManualSignalingProvider({ children }: { children: React.ReactNod
     setIceCandidateInput('');
     setCurrentCall(null);
     setCallKeepUUID(null);
+    setShowCallScreen(false);
   };
 
   return (
@@ -90,6 +94,8 @@ export function ManualSignalingProvider({ children }: { children: React.ReactNod
         setIceCandidateInput,
         callKeepUUID,
         setCallKeepUUID,
+        showCallScreen,
+        setShowCallScreen,
         reset,
       }}
     >
