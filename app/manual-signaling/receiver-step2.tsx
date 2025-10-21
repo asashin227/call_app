@@ -1,3 +1,4 @@
+import CallScreen from '@/components/CallScreen';
 import { useManualSignaling } from '@/contexts/ManualSignalingContext';
 import { webRTCService } from '@/services/WebRTCService';
 import { generateUUID } from '@/utils/uuid';
@@ -7,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -25,14 +27,19 @@ export default function ReceiverStep2() {
     iceCandidateInput,
     setIceCandidateInput,
     setCallKeepUUID,
+    showCallScreen,
+    setShowCallScreen,
   } = useManualSignaling();
   const [hasShownAlert, setHasShownAlert] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [activeCallData, setActiveCallData] = useState<any>(null);
 
   // 接続確立時のコールバックを設定
   useEffect(() => {
     const handleConnectionEstablished = () => {
       if (!hasShownAlert) {
         setHasShownAlert(true);
+        setIsConnected(true);
         
         // 標準的なUUID形式のCallKeep UUIDを生成
         const uuid = generateUUID();
@@ -43,8 +50,25 @@ export default function ReceiverStep2() {
         // CallKeepで通話を開始（着信側として）
         RNCallKeep.startCall(uuid, 'Manual Peer', 'Manual Peer', 'generic', false);
         
-        // 通話が接続されたことを通知（グローバルモーダルが自動で表示される）
-        console.log('🎉 Connection established! Call screen will be displayed automatically.');
+        // 通話が接続されたことを通知
+        console.log('🎉 Connection established! Call screen will be displayed.');
+        
+        // CallDataを設定
+        const currentCallData = webRTCService.getCurrentCall();
+        if (currentCallData) {
+          setActiveCallData(currentCallData);
+        } else {
+          setActiveCallData({
+            id: uuid,
+            targetUser: 'Manual Peer',
+            type: 'incoming',
+            status: 'connected',
+            hasVideo: false,
+          });
+        }
+        
+        // CallScreenを表示
+        setShowCallScreen(true);
         
         // 非ブロッキングアラートを表示
         setTimeout(() => {
@@ -58,14 +82,23 @@ export default function ReceiverStep2() {
       }
     };
 
+    const handleCallStatusChange = (status: string) => {
+      if (status === 'ended' || status === 'failed') {
+        setShowCallScreen(false);
+        setActiveCallData(null);
+        setIsConnected(false);
+      }
+    };
+
     webRTCService.setEventListeners({
       onConnectionEstablished: handleConnectionEstablished,
+      onCallStatusChange: handleCallStatusChange,
     });
 
     return () => {
       // クリーンアップ
     };
-  }, [hasShownAlert, setCallKeepUUID]);
+  }, [hasShownAlert, setCallKeepUUID, setShowCallScreen]);
 
   const addIceCandidate = async () => {
     try {
@@ -103,8 +136,57 @@ export default function ReceiverStep2() {
     Alert.alert('コピー完了', `${label}をクリップボードにコピーしました`);
   };
 
+  // CallScreenを閉じる処理（通話終了）
+  const handleEndCall = () => {
+    setShowCallScreen(false);
+    setActiveCallData(null);
+    setIsConnected(false);
+    webRTCService.endCall();
+  };
+
+  // CallScreenを最小化する処理（通話は継続）
+  const handleMinimizeCall = () => {
+    console.log('📱 ReceiverStep2: Minimizing call screen');
+    setShowCallScreen(false);
+  };
+
   return (
+    <>
+      {/* CallScreenモーダル */}
+      <Modal
+        visible={showCallScreen && activeCallData !== null}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleMinimizeCall}
+      >
+        {activeCallData && (
+          <CallScreen
+            callData={activeCallData}
+            onEndCall={handleEndCall}
+            onMinimize={handleMinimizeCall}
+          />
+        )}
+      </Modal>
+      
+      {/* メインコンテンツ */}
     <SafeAreaView style={styles.container}>
+      {/* 通話中バナー */}
+      {isConnected && !showCallScreen && (
+        <TouchableOpacity
+          style={styles.callBanner}
+          onPress={() => setShowCallScreen(true)}
+        >
+          <View style={styles.callBannerContent}>
+            <Ionicons name="call" size={20} color="#fff" />
+            <Text style={styles.callBannerText}>通話中</Text>
+          </View>
+          <View style={styles.callBannerAction}>
+            <Text style={styles.callBannerActionText}>タップして戻る</Text>
+            <Ionicons name="chevron-up" size={20} color="#fff" />
+          </View>
+        </TouchableOpacity>
+      )}
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -194,6 +276,7 @@ export default function ReceiverStep2() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </>
   );
 }
 
@@ -201,6 +284,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  callBanner: {
+    backgroundColor: '#34C759',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  callBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  callBannerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  callBannerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  callBannerActionText: {
+    color: '#fff',
+    fontSize: 14,
   },
   keyboardView: {
     flex: 1,

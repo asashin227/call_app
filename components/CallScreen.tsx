@@ -1,3 +1,4 @@
+import { audioRouteService } from '@/services/AudioRouteService';
 import { CallData, webRTCService } from '@/services/WebRTCService';
 import { generateUUID } from '@/utils/uuid';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,9 +22,10 @@ const { width, height } = Dimensions.get('window');
 interface CallScreenProps {
   callData: CallData;
   onEndCall: () => void;
+  onMinimize?: () => void;
 }
 
-export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
+export default function CallScreen({ callData, onEndCall, onMinimize }: CallScreenProps) {
   const [localStream, setLocalStream] = useState<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
   const [callStatus, setCallStatus] = useState<CallData['status']>(callData.status);
@@ -92,6 +94,41 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
       }
     };
   }, []);
+
+  // AudioRouteServiceのリスナーを設定（CallKitからの音声経路変更を検知）
+  useEffect(() => {
+    console.log('🎧 CallScreen: Setting up AudioRouteService listener');
+    
+    const unsubscribe = audioRouteService.addListener((event) => {
+      console.log(`🎧 CallScreen: Received audio route change event:`, event);
+      console.log(`- Route: ${event.route}, Reason: ${event.reason}, Source: ${event.source}`);
+      
+      // スピーカー状態を更新
+      const newSpeakerState = event.route === 'Speaker';
+      
+      // UI状態を常に更新
+      console.log(`🎧 CallScreen: Updating speaker state: ${newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)'}`);
+      setIsSpeakerEnabled(newSpeakerState);
+      
+      // CallKitからの変更の場合のみInCallManagerに反映
+      // （app-uiからの変更の場合は、toggleSpeaker()で既に設定済み）
+      if (event.source === 'callkit') {
+        try {
+          InCallManager.setForceSpeakerphoneOn(newSpeakerState);
+          console.log(`🎧 CallScreen: InCallManager synced to match CallKit state`);
+        } catch (error) {
+          console.error('❌ CallScreen: Failed to sync InCallManager:', error);
+        }
+      } else {
+        console.log(`🎧 CallScreen: Skipping InCallManager update (already set by app UI)`);
+      }
+    });
+    
+    return () => {
+      console.log('🎧 CallScreen: Removing AudioRouteService listener');
+      unsubscribe();
+    };
+  }, []); // 依存配列を空にして、リスナーを一度だけ作成
 
   // 通話時間のカウンター
   useEffect(() => {
@@ -200,12 +237,19 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
   // スピーカー切り替え（イヤピース/スピーカー）
   const toggleSpeaker = useCallback(() => {
     const newSpeakerState = !isSpeakerEnabled;
+    
+    console.log(`🔊 CallScreen: App UI toggling speaker: ${isSpeakerEnabled} → ${newSpeakerState}`);
+    
+    // UI状態を更新
     setIsSpeakerEnabled(newSpeakerState);
     
     try {
       // InCallManagerを使用してスピーカーを切り替え
       InCallManager.setForceSpeakerphoneOn(newSpeakerState);
-      console.log('🔊 CallScreen: Speaker toggled:', newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)');
+      console.log('🔊 CallScreen: InCallManager updated:', newSpeakerState ? 'ON (Speaker)' : 'OFF (Earpiece)');
+      
+      // AudioRouteServiceに通知（アプリUI側からの変更）
+      audioRouteService.handleAppUIRouteChange(newSpeakerState);
     } catch (error) {
       console.error('❌ CallScreen: Failed to toggle speaker:', error);
     }
@@ -258,8 +302,18 @@ export default function CallScreen({ callData, onEndCall }: CallScreenProps) {
       
       {/* ヘッダー部分 */}
       <View style={styles.header}>
-        <Text style={styles.contactName}>{callData.targetUser}</Text>
-        <Text style={styles.callStatus}>{getStatusMessage()}</Text>
+        {onMinimize && (
+          <TouchableOpacity
+            style={styles.minimizeButton}
+            onPress={onMinimize}
+          >
+            <Ionicons name="chevron-down" size={28} color="#fff" />
+          </TouchableOpacity>
+        )}
+        <View style={styles.headerContent}>
+          <Text style={styles.contactName}>{callData.targetUser}</Text>
+          <Text style={styles.callStatus}>{getStatusMessage()}</Text>
+        </View>
       </View>
 
       {/* ビデオ表示エリア */}
@@ -375,6 +429,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
     zIndex: 2,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  minimizeButton: {
+    position: 'absolute',
+    left: 20,
+    top: 20,
+    padding: 8,
+    zIndex: 3,
+  },
+  headerContent: {
+    alignItems: 'center',
+    flex: 1,
   },
   contactName: {
     fontSize: 24,
